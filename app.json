@@ -1,25 +1,63 @@
 {
   "expo": {
-    "name": "studysnap-app",
-    "slug": "studysnap-app",
+    "name": "StudySnap",
+    "slug": "studysnap",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0a0a0f",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0f"
+    },
+    "scheme": "studysnap",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.studysnap.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "StudySnap needs your microphone to record lectures so you can generate study materials.",
+        "NSCameraUsageDescription": "StudySnap needs your camera to photograph whiteboards and handwritten notes.",
+        "NSPhotoLibraryUsageDescription": "StudySnap needs photo library access to select images of your notes."
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#0a0a0f"
       },
-      "predictiveBackGestureEnabled": false
+      "package": "com.studysnap.app",
+      "permissions": [
+        "RECORD_AUDIO",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
+      "usesCleartextTraffic": true
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "StudySnap needs your camera to photograph whiteboards and handwritten notes."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "StudySnap needs photo library access to select images of your notes."
+        }
+      ],
+      "expo-audio"
+    ],
+    "experiments": {
+      "typedRoutes": true
     }
   }
 }
