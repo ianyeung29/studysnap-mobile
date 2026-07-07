@@ -12,6 +12,8 @@ export interface Session {
   photoCount: number;
   templateId: string;
   content: string;
+  course?: string; // e.g. "CHEM 101"
+  isFavorite?: boolean;
 }
 
 export async function saveSessions(sessions: Session[]): Promise<void> {

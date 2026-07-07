@@ -8,6 +8,7 @@ import {
   Image,
   Alert,
   Platform,
+  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -47,6 +48,7 @@ export default function SessionScreen() {
 
   // Processing
   const [isGenerating, setIsGenerating] = useState(false);
+  const [course, setCourse] = useState("");
 
   // ── Start recording on mount ────────────────────────────────
   useEffect(() => {
@@ -227,13 +229,14 @@ export default function SessionScreen() {
           ),
           durationSeconds: String(seconds),
           templateId,
+          course: course.trim(),
         },
       });
     } catch (e) {
       Alert.alert("Error", "Something went wrong. Please try again.");
       setIsGenerating(false);
     }
-  }, [isGenerating, photos, seconds, templateId, router, recorder]);
+  }, [isGenerating, photos, seconds, templateId, router, recorder, course]);
 
   const confirmStop = () => {
     Alert.alert(
@@ -339,6 +342,19 @@ export default function SessionScreen() {
           </View>
         </View>
 
+        {/* Course / Subject Tag */}
+        <View style={styles.inputPanel}>
+          <Text style={styles.inputLabel}>🏷️ Subject / Course</Text>
+          <TextInput
+            style={styles.textInput}
+            value={course}
+            onChangeText={setCourse}
+            placeholder="e.g. CHEM 101, History 202, etc."
+            placeholderTextColor={Colors.textMuted}
+            maxLength={30}
+          />
+        </View>
+
         {/* Template selector */}
         <View style={styles.templatePanel}>
           <Text style={styles.templateTitle}>📚 Output Format</Text>
@@ -397,6 +413,30 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bgPrimary },
   scroll: { flex: 1 },
   content: { padding: Spacing.lg, paddingBottom: Spacing["3xl"], gap: Spacing.lg },
+
+  inputPanel: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.md,
+    gap: Spacing.xs,
+  },
+  inputLabel: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  textInput: {
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    color: Colors.textPrimary,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    fontSize: FontSize.base,
+  },
 
   // Recording panel
   recordingPanel: {

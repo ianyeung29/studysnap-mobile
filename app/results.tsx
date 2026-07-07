@@ -171,6 +171,22 @@ export default function ResultsScreen() {
     }
   };
 
+  const toggleFavorite = async () => {
+    if (!session) return;
+    try {
+      const updatedSession = { ...session, isFavorite: !session.isFavorite };
+      const sessions = await loadSessions();
+      const updatedSessions = sessions.map((s: Session) =>
+        s.id === session.id ? updatedSession : s
+      );
+      const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+      await AsyncStorage.setItem("studysnap_sessions", JSON.stringify(updatedSessions));
+      setSession(updatedSession);
+    } catch {
+      Alert.alert("Error", "Could not toggle favorite status.");
+    }
+  };
+
   if (!session) {
     return (
       <View style={styles.center}>
@@ -192,6 +208,9 @@ export default function ResultsScreen() {
               <Text style={styles.templateLabel}>{currentTemplate?.label}</Text>
               <Text style={styles.title}>{session.title}</Text>
             </View>
+            <TouchableOpacity style={styles.favoriteBtn} onPress={toggleFavorite}>
+              <Text style={styles.favoriteBtnIcon}>{session.isFavorite ? "⭐" : "☆"}</Text>
+            </TouchableOpacity>
           </View>
           <Text style={styles.meta}>
             {formatDate(session.date)} · {formatDuration(session.durationSeconds)} · {session.photoCount} photo{session.photoCount !== 1 ? "s" : ""}
@@ -306,6 +325,15 @@ const styles = StyleSheet.create({
   titleInfo: { flex: 1 },
   templateLabel: { fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.bold, letterSpacing: 1, textTransform: "uppercase" },
   title: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  favoriteBtn: {
+    padding: 8,
+    borderRadius: Radius.sm,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  favoriteBtnIcon: {
+    fontSize: 22,
+    color: Colors.accent3,
+  },
   meta: { fontSize: FontSize.xs, color: Colors.textMuted },
 
   editBar: {

@@ -24,6 +24,7 @@ export default function ProcessingScreen() {
     photoTexts: string;
     durationSeconds: string;
     templateId: string;
+    course: string;
   }>();
 
   const [steps, setSteps] = useState<Step[]>([]);
@@ -122,6 +123,7 @@ export default function ProcessingScreen() {
         photoCount: photoUris.length,
         templateId,
         content,
+        course: params.course || "General",
       };
       await addSession(session);
       updateStep("save", "done", "Session saved ✓");
