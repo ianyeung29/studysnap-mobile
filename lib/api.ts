@@ -139,3 +139,26 @@ export async function summarize(
     course: data.course,
   };
 }
+
+// ─── Explain Concept (ELI5) ──────────────────────────────────
+export async function explainConcept(
+  concept: string,
+  context: string
+): Promise<string> {
+  const res = await loggedFetch(`${API_BASE_URL}/api/explain`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Bypass-Tunnel-Reminder": "true",
+    },
+    body: JSON.stringify({ concept, context }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Concept explanation failed.");
+  }
+
+  const data = await res.json();
+  return data.explanation ?? "";
+}

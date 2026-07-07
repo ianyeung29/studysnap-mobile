@@ -9,6 +9,7 @@ import {
   Alert,
   Share,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState, useCallback } from "react";
@@ -32,6 +33,12 @@ export default function ResultsScreen() {
   const [regenerating, setRegenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // ELI5 Modal State
+  const [explainModalVisible, setExplainModalVisible] = useState(false);
+  const [conceptToExplain, setConceptToExplain] = useState("");
+  const [explanationResult, setExplanationResult] = useState("");
+  const [explaining, setExplaining] = useState(false);
 
   // Stop speech on unmount
   useEffect(() => {
@@ -126,15 +133,6 @@ export default function ResultsScreen() {
       setRegenerating(true);
 
       try {
-        // We need to re-fetch or reconstruct what we had. However, since the text content 
-        // was generated from combined audio + photos, we should generate with the new template.
-        // As we don't store the raw notes in the local session in AsyncStorage to save space,
-        // let's pass a warning or reconstruct if we can. To make it seamless, let's keep it simple:
-        // Normally, you would pass the raw notes. Let's make sure the prompt lets us reconstruct or just alert.
-        // For a full MVP, let's assume we can regenerate by calling summarize with the current session content as a context,
-        // or we alert that regeneration requires a new session.
-        // Wait, to regenerate, we need the original compiled notes. Let's just run summarize on the current content
-        // to convert it to the new template format, which GPT-4o-mini is smart enough to do!
         const { title, content } = await summarize(
           `Convert this current study material into the requested format: ${newTemplateId}\n\n${editableContent}`,
           newTemplateId
@@ -284,6 +282,31 @@ export default function ResultsScreen() {
     }
   };
 
+  const handleExplainConcept = async () => {
+    if (!conceptToExplain.trim()) {
+      Alert.alert("Input Required", "Please type a concept to explain.");
+      return;
+    }
+    setExplaining(true);
+    setExplanationResult("");
+    try {
+      const { explainConcept } = await import("@/lib/api");
+      const resultText = await explainConcept(conceptToExplain, editableContent);
+      setExplanationResult(resultText);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to generate explanation.";
+      Alert.alert("Error", msg);
+    } finally {
+      setExplaining(false);
+    }
+  };
+
+  const handleScheduleReminders = async () => {
+    if (!session) return;
+    const { scheduleSpacedRepetitionReminders } = await import("@/lib/notifications");
+    await scheduleSpacedRepetitionReminders(session.id, session.title);
+  };
+
   if (!session) {
     return (
       <View style={styles.center}>
@@ -308,6 +331,9 @@ export default function ResultsScreen() {
             <TouchableOpacity style={styles.ttsBtn} onPress={handleToggleSpeech}>
               <Text style={styles.ttsBtnIcon}>{isSpeaking ? "⏹️" : "🔊"}</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.ttsBtn} onPress={handleScheduleReminders}>
+              <Text style={styles.ttsBtnIcon}>⏰</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.favoriteBtn} onPress={toggleFavorite}>
               <Text style={styles.favoriteBtnIcon}>{session.isFavorite ? "⭐" : "☆"}</Text>
             </TouchableOpacity>
@@ -329,9 +355,21 @@ export default function ResultsScreen() {
               <Text style={styles.saveBtnText}>Save</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.editBtn} onPress={() => setIsEditing(true)}>
-              <Text style={styles.editBtnText}>Edit</Text>
-            </TouchableOpacity>
+            <View style={styles.editActionsRow}>
+              <TouchableOpacity
+                style={styles.explainBtn}
+                onPress={() => {
+                  setExplainModalVisible(true);
+                  setConceptToExplain("");
+                  setExplanationResult("");
+                }}
+              >
+                <Text style={styles.explainBtnText}>💡 ELI5</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.editBtn} onPress={() => setIsEditing(true)}>
+                <Text style={styles.editBtnText}>Edit</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -408,6 +446,63 @@ export default function ResultsScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* ELI5 Explanation Modal */}
+      <Modal
+        visible={explainModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setExplainModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>💡 Concept Simplifier (ELI5)</Text>
+              <TouchableOpacity onPress={() => setExplainModalVisible(false)}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Type any concept from this lecture to get a simple, creative analogy.
+            </Text>
+
+            <View style={styles.modalInputRow}>
+              <TextInput
+                style={styles.modalInput}
+                value={conceptToExplain}
+                onChangeText={setConceptToExplain}
+                placeholder="e.g. Mitochondria, Backpropagation"
+                placeholderTextColor={Colors.textMuted}
+                maxLength={40}
+              />
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, explaining && styles.modalSubmitBtnDisabled]}
+                onPress={handleExplainConcept}
+                disabled={explaining}
+              >
+                {explaining ? (
+                  <ActivityIndicator color={Colors.white} size="small" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>Explain</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.explanationScroll}>
+              {explanationResult ? (
+                <Text style={styles.explanationText}>{explanationResult}</Text>
+              ) : explaining ? (
+                <Text style={styles.explanationPlaceholder}>⏳ Brewing a simple analogy...</Text>
+              ) : (
+                <Text style={styles.explanationPlaceholder}>
+                  Analogies will appear here to help you study...
+                </Text>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -462,6 +557,19 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   editHint: { fontSize: FontSize.xs, color: Colors.textSecondary, flex: 1, marginRight: Spacing.sm },
+  editActionsRow: {
+    flexDirection: "row",
+    gap: Spacing.xs,
+  },
+  explainBtn: {
+    backgroundColor: "rgba(245,158,11,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.3)",
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+  },
+  explainBtnText: { color: Colors.accent3, fontSize: FontSize.xs, fontWeight: FontWeight.bold },
   editBtn: {
     backgroundColor: Colors.bgCard,
     borderWidth: 1,
@@ -491,9 +599,8 @@ const styles = StyleSheet.create({
   readOnlyScroll: { flex: 1 },
   contentText: {
     color: Colors.textPrimary,
-    fontSize: FontSize.base,
-    lineHeight: 24,
-    fontFamily: "monospace",
+    fontSize: FontSize.sm,
+    lineHeight: 22,
   },
 
   textarea: {
@@ -551,4 +658,94 @@ const styles = StyleSheet.create({
   },
   convertChipIcon: { fontSize: 16 },
   convertChipLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.semibold },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: Colors.bgCard,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    padding: Spacing.lg,
+    maxHeight: "80%",
+    minHeight: "50%",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+  },
+  modalTitle: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  modalCloseText: {
+    fontSize: FontSize.lg,
+    color: Colors.textMuted,
+    padding: 4,
+  },
+  modalSubtitle: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.md,
+  },
+  modalInputRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  modalInput: {
+    flex: 1,
+    height: 44,
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    color: Colors.textPrimary,
+    paddingHorizontal: Spacing.md,
+    fontSize: FontSize.sm,
+  },
+  modalSubmitBtn: {
+    height: 44,
+    backgroundColor: Colors.accent1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalSubmitBtnDisabled: {
+    opacity: 0.6,
+  },
+  modalSubmitBtnText: {
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.sm,
+  },
+  explanationScroll: {
+    flex: 1,
+    backgroundColor: Colors.bgInput,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  explanationText: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+  },
+  explanationPlaceholder: {
+    color: Colors.textMuted,
+    fontSize: FontSize.sm,
+    fontStyle: "italic",
+    textAlign: "center",
+    marginTop: Spacing.xl,
+  },
 });

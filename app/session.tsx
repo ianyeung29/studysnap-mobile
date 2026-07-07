@@ -138,7 +138,7 @@ export default function SessionScreen() {
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ["images"],
       quality: 0.85,
-      allowsEditing: false,
+      allowsEditing: true,
     });
 
     if (result.canceled || !result.assets[0]) return;
