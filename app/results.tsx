@@ -18,6 +18,8 @@ import * as Sharing from "expo-sharing";
 import * as Clipboard from "expo-clipboard";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
 import { loadSessions, Session, addSession, formatDate, formatDuration } from "@/lib/storage";
+import * as Speech from "expo-speech";
+import * as FileSystem from "expo-file-system/legacy";
 import { TEMPLATES, TemplateId } from "@/lib/templates";
 import { summarize } from "@/lib/api";
 
@@ -29,6 +31,14 @@ export default function ResultsScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // Stop speech on unmount
+  useEffect(() => {
+    return () => {
+      Speech.stop();
+    };
+  }, []);
 
   useEffect(() => {
     if (params.sessionId) {
@@ -187,6 +197,93 @@ export default function ResultsScreen() {
     }
   };
 
+  const cleanMarkdownForSpeech = (markdown: string): string => {
+    return markdown
+      .replace(/[#*`_~-]/g, "") // remove formatting characters
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // replace markdown links with text
+      .trim();
+  };
+
+  const handleToggleSpeech = async () => {
+    if (isSpeaking) {
+      Speech.stop();
+      setIsSpeaking(false);
+    } else {
+      const textToSpeak = cleanMarkdownForSpeech(editableContent);
+      if (!textToSpeak) return;
+      setIsSpeaking(true);
+      Speech.speak(textToSpeak, {
+        onDone: () => setIsSpeaking(false),
+        onError: () => setIsSpeaking(false),
+        onStopped: () => setIsSpeaking(false),
+      });
+    }
+  };
+
+  const parseFlashcardsToTSV = (markdown: string): string => {
+    const cards = markdown.split("---");
+    let tsv = "";
+    for (const card of cards) {
+      const lines = card.split("\n");
+      let question = "";
+      let answer = "";
+      let isReadingQ = false;
+      let isReadingA = false;
+
+      for (const line of lines) {
+        const qIndex = line.indexOf("Q:");
+        const aIndex = line.indexOf("A:");
+
+        if (qIndex !== -1) {
+          question = line.substring(qIndex + 2).trim();
+          isReadingQ = true;
+          isReadingA = false;
+        } else if (aIndex !== -1) {
+          answer = line.substring(aIndex + 2).trim();
+          isReadingQ = false;
+          isReadingA = true;
+        } else {
+          const cleaned = line.trim();
+          if (cleaned) {
+            if (isReadingQ) {
+              question += " " + cleaned;
+            } else if (isReadingA) {
+              answer += " " + cleaned;
+            }
+          }
+        }
+      }
+
+      const cleanQ = question.replace(/[#*`_~]/g, "").trim();
+      const cleanA = answer.replace(/[#*`_~]/g, "").trim();
+      if (cleanQ && cleanA) {
+        tsv += `${cleanQ}\t${cleanA}\n`;
+      }
+    }
+    return tsv;
+  };
+
+  const handleExportAnki = async () => {
+    try {
+      const tsvContent = parseFlashcardsToTSV(editableContent);
+      if (!tsvContent.trim()) {
+        Alert.alert("Empty Deck", "No valid flashcards found to export.");
+        return;
+      }
+      const fileUri = FileSystem.cacheDirectory + `${session?.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_anki_deck.txt`;
+      await FileSystem.writeAsStringAsync(fileUri, tsvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      await Sharing.shareAsync(fileUri, {
+        mimeType: "text/plain",
+        dialogTitle: "Export Flashcards to Anki",
+        UTI: "public.plain-text",
+      });
+    } catch (err) {
+      Alert.alert("Export Failed", "Could not export flashcards to Anki.");
+    }
+  };
+
   if (!session) {
     return (
       <View style={styles.center}>
@@ -208,6 +305,9 @@ export default function ResultsScreen() {
               <Text style={styles.templateLabel}>{currentTemplate?.label}</Text>
               <Text style={styles.title}>{session.title}</Text>
             </View>
+            <TouchableOpacity style={styles.ttsBtn} onPress={handleToggleSpeech}>
+              <Text style={styles.ttsBtnIcon}>{isSpeaking ? "⏹️" : "🔊"}</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.favoriteBtn} onPress={toggleFavorite}>
               <Text style={styles.favoriteBtnIcon}>{session.isFavorite ? "⭐" : "☆"}</Text>
             </TouchableOpacity>
@@ -271,6 +371,12 @@ export default function ResultsScreen() {
           <TouchableOpacity style={styles.exportBtn} onPress={handleExportPDF} id="export-pdf-btn">
             <Text style={styles.exportBtnText}>📄 PDF</Text>
           </TouchableOpacity>
+
+          {session.templateId === "flashcards" && (
+            <TouchableOpacity style={styles.exportBtn} onPress={handleExportAnki} id="export-anki-btn">
+              <Text style={styles.exportBtnText}>🃏 Anki</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Converter / Regenerator Options */}
@@ -333,6 +439,15 @@ const styles = StyleSheet.create({
   favoriteBtnIcon: {
     fontSize: 22,
     color: Colors.accent3,
+  },
+  ttsBtn: {
+    padding: 8,
+    borderRadius: Radius.sm,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  ttsBtnIcon: {
+    fontSize: 22,
+    color: Colors.textPrimary,
   },
   meta: { fontSize: FontSize.xs, color: Colors.textMuted },
 

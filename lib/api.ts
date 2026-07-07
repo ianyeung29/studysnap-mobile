@@ -117,7 +117,7 @@ export async function extractImageText(imageUri: string): Promise<string> {
 export async function summarize(
   notes: string,
   templateId: string
-): Promise<{ title: string; content: string }> {
+): Promise<{ title: string; content: string; course?: string }> {
   const res = await loggedFetch(`${API_BASE_URL}/api/summarize`, {
     method: "POST",
     headers: {
@@ -133,5 +133,9 @@ export async function summarize(
   }
 
   const data = await res.json();
-  return { title: data.title ?? "Untitled", content: data.content ?? "" };
+  return {
+    title: data.title ?? "Untitled",
+    content: data.content ?? "",
+    course: data.course,
+  };
 }

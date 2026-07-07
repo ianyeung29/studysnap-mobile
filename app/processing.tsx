@@ -110,7 +110,7 @@ export default function ProcessingScreen() {
 
       // 4. Generate
       updateStep("generate", "running");
-      const { title, content } = await summarize(combinedNotes, templateId);
+      const { title, content, course: autoCourse } = await summarize(combinedNotes, templateId);
       updateStep("generate", "done", "Study materials ready ✓");
 
       // 5. Save
@@ -123,7 +123,7 @@ export default function ProcessingScreen() {
         photoCount: photoUris.length,
         templateId,
         content,
-        course: params.course || "General",
+        course: params.course || autoCourse || "General",
       };
       await addSession(session);
       updateStep("save", "done", "Session saved ✓");
