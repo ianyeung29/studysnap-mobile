@@ -8,6 +8,7 @@
       "distribution": "internal",
       "node": "20.19.4",
       "env": {
+        "NODE_VERSION": "20.19.4",
         "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
       }
     },
@@ -15,6 +16,7 @@
       "distribution": "internal",
       "node": "20.19.4",
       "env": {
+        "NODE_VERSION": "20.19.4",
         "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
       },
       "android": {
@@ -24,6 +26,7 @@
     "production": {
       "node": "20.19.4",
       "env": {
+        "NODE_VERSION": "20.19.4",
         "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
       }
     }
