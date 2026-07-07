@@ -6,7 +6,7 @@ import * as FileSystem from "expo-file-system/legacy";
 // e.g. "http://192.168.1.42:3001"
 // In production: set to your deployed Vercel URL
 // e.g. "https://studysnap.vercel.app"
-export const API_BASE_URL = "http://10.8.5.90:3001";
+export const API_BASE_URL = "https://studysnap-backend-nfne5mv9j-kittycatty.vercel.app";
 
 // Helper wrapper to log fetch errors
 async function loggedFetch(
