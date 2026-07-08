@@ -18,6 +18,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
 import { loadSessions, Session, formatDate, formatDuration } from "@/lib/storage";
 import { TEMPLATES } from "@/lib/templates";
+import { subscriptionService } from "@/lib/subscription";
+import SubscriptionPaywall from "@/components/SubscriptionPaywall";
 import BottomNav from "@/components/BottomNav";
 
 export default function HomeScreen() {
@@ -29,6 +31,10 @@ export default function HomeScreen() {
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackType, setFeedbackType] = useState<"Suggestion" | "Problem">("Suggestion");
+
+  // Premium / Subscription Paywall States
+  const [isPremium, setIsPremium] = useState(false);
+  const [paywallVisible, setPaywallVisible] = useState(false);
 
   const handleSendFeedback = () => {
     if (!feedbackText.trim()) {
@@ -64,6 +70,9 @@ export default function HomeScreen() {
         setSessions(s);
         setLoading(false);
       });
+      subscriptionService.getEntitlement().then((e) => {
+        setIsPremium(e.isActive);
+      });
     }, [])
   );
 
@@ -78,6 +87,16 @@ export default function HomeScreen() {
       >
         {/* Hero */}
         <View style={styles.hero}>
+          {!isPremium && (
+            <TouchableOpacity
+              style={styles.upgradeFloatBtn}
+              onPress={() => setPaywallVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.upgradeFloatIcon}>⚡ Upgrade</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={styles.feedbackFloatBtn}
             onPress={() => setFeedbackModalVisible(true)}
@@ -98,7 +117,21 @@ export default function HomeScreen() {
         {/* Main CTA */}
         <TouchableOpacity
           style={styles.startBtn}
-          onPress={() => router.push("/session")}
+          onPress={() => {
+            const activeSessions = sessions.filter((s) => !s.isFailed);
+            if (!isPremium && activeSessions.length >= 2) {
+              Alert.alert(
+                "Free Limit Reached",
+                "You have processed the limit of 2 free lecture sessions. Please upgrade to Premium for unlimited lectures and imports!",
+                [
+                  { text: "View Plans", onPress: () => setPaywallVisible(true) },
+                  { text: "Cancel", style: "cancel" },
+                ]
+              );
+            } else {
+              router.push("/session");
+            }
+          }}
           activeOpacity={0.85}
           id="start-session-btn"
         >
@@ -116,6 +149,18 @@ export default function HomeScreen() {
         <TouchableOpacity
           style={styles.importBtn}
           onPress={async () => {
+            const activeSessions = sessions.filter((s) => !s.isFailed);
+            if (!isPremium && activeSessions.length >= 2) {
+              Alert.alert(
+                "Free Limit Reached",
+                "You have processed the limit of 2 free lecture sessions. Please upgrade to Premium for unlimited lectures and imports!",
+                [
+                  { text: "View Plans", onPress: () => setPaywallVisible(true) },
+                  { text: "Cancel", style: "cancel" },
+                ]
+              );
+              return;
+            }
             try {
               const DocumentPicker = await import("expo-document-picker");
               const result = await DocumentPicker.getDocumentAsync({
@@ -219,6 +264,16 @@ export default function HomeScreen() {
         </Text>
       </ScrollView>
 
+      <SubscriptionPaywall
+        visible={paywallVisible}
+        onClose={() => setPaywallVisible(false)}
+        onPurchaseSuccess={() => {
+          subscriptionService.getEntitlement().then((e) => {
+            setIsPremium(e.isActive);
+          });
+        }}
+      />
+
       {/* Sleek Bottom Navigation */}
       <BottomNav currentTab="home" />
     </SafeAreaView>
@@ -228,7 +283,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bgPrimary },
   scroll: { flex: 1 },
-  content: { padding: Spacing.lg, paddingBottom: Spacing["3xl"] },
+  content: { padding: Spacing.lg, paddingBottom: 110 },
 
   hero: { alignItems: "center", paddingVertical: Spacing["2xl"] },
   logoEmoji: { fontSize: 48, marginBottom: Spacing.sm },
@@ -423,6 +478,24 @@ const styles = StyleSheet.create({
   feedbackFloatIcon: {
     fontSize: 11,
     color: Colors.textSecondary,
+    fontWeight: FontWeight.bold,
+  },
+
+  // Upgrade float button
+  upgradeFloatBtn: {
+    position: "absolute",
+    top: Spacing.xs,
+    left: Spacing.xs,
+    backgroundColor: "rgba(168,85,247,0.12)",
+    borderWidth: 1,
+    borderColor: Colors.accent3,
+    borderRadius: Radius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  upgradeFloatIcon: {
+    fontSize: 11,
+    color: Colors.accent3,
     fontWeight: FontWeight.bold,
   },
 
