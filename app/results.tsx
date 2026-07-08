@@ -25,6 +25,7 @@ import { TEMPLATES, TemplateId } from "@/lib/templates";
 import { summarize, transcribeAudio } from "@/lib/api";
 import MarkdownText from "@/components/MarkdownText";
 import { scheduleCustomReminder } from "../lib/notifications";
+import { Feather } from "@expo/vector-icons";
 
 export default function ResultsScreen() {
   const router = useRouter();
@@ -74,6 +75,9 @@ export default function ResultsScreen() {
 
   // Custom Reminder Picker Modal
   const [reminderModalVisible, setReminderModalVisible] = useState(false);
+
+  // Document More Actions Menu
+  const [moreMenuVisible, setMoreMenuVisible] = useState(false);
 
   // Stop speech on unmount
   const [isRetrying, setIsRetrying] = useState(false);
@@ -794,10 +798,15 @@ export default function ResultsScreen() {
               )}
             </View>
             <TouchableOpacity style={styles.ttsBtn} onPress={() => setReminderModalVisible(true)}>
-              <Text style={styles.ttsBtnIcon}>⏰</Text>
+              <Feather name="bell" size={16} color={Colors.textPrimary} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.favoriteBtn} onPress={toggleFavorite}>
-              <Text style={styles.favoriteBtnIcon}>{session.isFavorite ? "⭐" : "☆"}</Text>
+              <Feather
+                name="star"
+                size={16}
+                color={session.isFavorite ? Colors.accent3 : Colors.textMuted}
+                fill={session.isFavorite ? Colors.accent3 : "transparent"}
+              />
             </TouchableOpacity>
           </View>
           
@@ -871,7 +880,7 @@ export default function ResultsScreen() {
             {isEditing ? (
               <View style={styles.contentCard}>
                 <View style={styles.contentCardHeader}>
-                  <Text style={styles.contentCardTitle}>✍️ Edit Summy</Text>
+                  <Text style={styles.contentCardTitle}>✍️ Edit Study Summary</Text>
                   <View style={styles.headerActionsToolbar}>
                     <TouchableOpacity
                       style={[styles.headerTextBtn, styles.headerTextBtnCancel]}
@@ -900,7 +909,7 @@ export default function ResultsScreen() {
             ) : (
               <View style={styles.contentCard}>
                 <View style={styles.contentCardHeader}>
-                  <Text style={styles.contentCardTitle}>📖 Summy</Text>
+                  <Text style={styles.contentCardTitle}>📖 Study Summary</Text>
                   <View style={styles.headerActionsToolbar}>
                     {/* ELI5 Tutor Button */}
                     <TouchableOpacity
@@ -912,16 +921,7 @@ export default function ResultsScreen() {
                       }}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.headerIconBtnText}>💡</Text>
-                    </TouchableOpacity>
-
-                    {/* Edit Button */}
-                    <TouchableOpacity
-                      style={styles.headerIconBtn}
-                      onPress={() => setIsEditing(true)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.headerIconBtnText}>✏️</Text>
+                      <Feather name="help-circle" size={16} color="rgb(245,158,11)" />
                     </TouchableOpacity>
 
                     {/* Speak Button */}
@@ -930,54 +930,25 @@ export default function ResultsScreen() {
                       onPress={handleToggleSpeech}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.headerIconBtnText}>{isSpeaking ? "⏹️" : "🔊"}</Text>
+                      <Feather name={isSpeaking ? "square" : "volume-2"} size={16} color={Colors.textPrimary} />
                     </TouchableOpacity>
 
-                    {/* Copy Button */}
+                    {/* Edit Button */}
                     <TouchableOpacity
                       style={styles.headerIconBtn}
-                      onPress={handleCopy}
+                      onPress={() => setIsEditing(true)}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.headerIconBtnText}>{copied ? "✅" : "📋"}</Text>
+                      <Feather name="edit-2" size={16} color={Colors.textPrimary} />
                     </TouchableOpacity>
 
-                    {/* Share Button */}
+                    {/* More Actions Button */}
                     <TouchableOpacity
                       style={styles.headerIconBtn}
-                      onPress={handleShare}
+                      onPress={() => setMoreMenuVisible(true)}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.headerIconBtnText}>📤</Text>
-                    </TouchableOpacity>
-
-                    {/* PDF Button */}
-                    <TouchableOpacity
-                      style={styles.headerIconBtn}
-                      onPress={handleExportPDF}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.headerIconBtnText}>📄</Text>
-                    </TouchableOpacity>
-
-                    {/* Anki Button */}
-                    {session.templateId === "flashcards" && (
-                      <TouchableOpacity
-                        style={styles.headerIconBtn}
-                        onPress={handleExportAnki}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.headerIconBtnText}>🃏</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    {/* Fullscreen Button */}
-                    <TouchableOpacity
-                      style={styles.headerIconBtn}
-                      onPress={() => setReadingMaximized(true)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.headerIconBtnText}>📖</Text>
+                      <Feather name="more-horizontal" size={16} color={Colors.textPrimary} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1075,7 +1046,7 @@ export default function ResultsScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* User Custom Reminder Modal */}
+      {/* User Custom Reminder Modal (Redesigned Compact Layout) */}
       <Modal
         visible={reminderModalVisible}
         transparent={true}
@@ -1086,37 +1057,161 @@ export default function ResultsScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>⏰ Set Study Reminder</Text>
-              <TouchableOpacity onPress={() => setReminderModalVisible(false)}>
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
             </View>
             <Text style={styles.modalSubtitle}>
               Select when you would like to receive a notification to review this study session.
             </Text>
 
-            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
               <View style={{ gap: Spacing.sm }}>
-                {[
-                  { label: "⚡ In 1 Hour (Quick review)", hours: 1, text: "1 hour" },
-                  { label: "🌅 Tomorrow Morning (In 18 hours)", hours: 18, text: "18 hours" },
-                  { label: "📅 In 3 Days", hours: 72, text: "3 days" },
-                  { label: "🗓️ In 1 Week", hours: 168, text: "1 week" },
-                  { label: "🎯 In 2 Weeks", hours: 336, text: "2 weeks" },
-                ].map((preset) => (
-                  <TouchableOpacity
-                    key={preset.hours}
-                    style={styles.reminderOptionBtn}
-                    onPress={() => handleSetReminder(preset.hours, preset.text)}
-                  >
-                    <Text style={styles.reminderOptionBtnText}>{preset.label}</Text>
-                  </TouchableOpacity>
-                ))}
+                {(() => {
+                  const now = new Date();
+                  
+                  // Preset 1: 1 Hour
+                  const target1 = new Date(Date.now() + 3600 * 1000);
+                  const label1 = `⚡ In 1 Hour (at ${target1.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})`;
+                  const hours1 = 1;
+
+                  // Preset 2: Tomorrow Morning 9:00 AM
+                  const target2 = new Date();
+                  target2.setDate(target2.getDate() + 1);
+                  target2.setHours(9, 0, 0, 0);
+                  const label2 = `🌅 Tomorrow morning, 9:00 AM (${target2.toLocaleDateString([], { month: 'short', day: 'numeric' })})`;
+                  const hours2 = Math.max(1, (target2.getTime() - now.getTime()) / (3600 * 1000));
+
+                  // Preset 3: 3 Days 12:00 PM
+                  const target3 = new Date();
+                  target3.setDate(target3.getDate() + 3);
+                  target3.setHours(12, 0, 0, 0);
+                  const label3 = `📅 In 3 Days, 12:00 PM (${target3.toLocaleDateString([], { month: 'short', day: 'numeric' })})`;
+                  const hours3 = Math.max(1, (target3.getTime() - now.getTime()) / (3600 * 1000));
+
+                  // Preset 4: 1 Week 9:00 AM
+                  const target4 = new Date();
+                  target4.setDate(target4.getDate() + 7);
+                  target4.setHours(9, 0, 0, 0);
+                  const label4 = `🗓️ In 1 Week, 9:00 AM (${target4.toLocaleDateString([], { month: 'short', day: 'numeric' })})`;
+                  const hours4 = Math.max(1, (target4.getTime() - now.getTime()) / (3600 * 1000));
+
+                  // Preset 5: 2 Weeks 9:00 AM
+                  const target5 = new Date();
+                  target5.setDate(target5.getDate() + 14);
+                  target5.setHours(9, 0, 0, 0);
+                  const label5 = `🎯 In 2 Weeks, 9:00 AM (${target5.toLocaleDateString([], { month: 'short', day: 'numeric' })})`;
+                  const hours5 = Math.max(1, (target5.getTime() - now.getTime()) / (3600 * 1000));
+
+                  return [
+                    { label: label1, hours: hours1, text: "1 hour" },
+                    { label: label2, hours: hours2, text: "tomorrow morning" },
+                    { label: label3, hours: hours3, text: "3 days" },
+                    { label: label4, hours: hours4, text: "1 week" },
+                    { label: label5, hours: hours5, text: "2 weeks" },
+                  ].map((preset, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={styles.reminderOptionBtn}
+                      onPress={() => handleSetReminder(preset.hours, preset.text)}
+                    >
+                      <Text style={styles.reminderOptionBtnText}>{preset.label}</Text>
+                    </TouchableOpacity>
+                  ));
+                })()}
               </View>
             </ScrollView>
 
             <TouchableOpacity
               style={[styles.modalBtn, styles.modalBtnCancel, { marginTop: Spacing.xs }]}
               onPress={() => setReminderModalVisible(false)}
+            >
+              <Text style={styles.modalBtnCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Document Options Modal */}
+      <Modal
+        visible={moreMenuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMoreMenuVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>📄 Document Options</Text>
+              <TouchableOpacity onPress={() => setMoreMenuVisible(false)}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: Spacing.sm }}>
+              {/* Fullscreen Option */}
+              <TouchableOpacity
+                style={styles.moreMenuOption}
+                onPress={() => {
+                  setMoreMenuVisible(false);
+                  setReadingMaximized(true);
+                }}
+              >
+                <Feather name="maximize-2" size={18} color={Colors.textPrimary} style={{ marginRight: Spacing.md }} />
+                <Text style={styles.moreMenuOptionText}>Immersive Fullscreen</Text>
+              </TouchableOpacity>
+
+              {/* Copy Option */}
+              <TouchableOpacity
+                style={styles.moreMenuOption}
+                onPress={() => {
+                  setMoreMenuVisible(false);
+                  handleCopy();
+                }}
+              >
+                <Feather name="copy" size={18} color={Colors.textPrimary} style={{ marginRight: Spacing.md }} />
+                <Text style={styles.moreMenuOptionText}>{copied ? "Copied ✅" : "Copy to Clipboard"}</Text>
+              </TouchableOpacity>
+
+              {/* Share Option */}
+              <TouchableOpacity
+                style={styles.moreMenuOption}
+                onPress={() => {
+                  setMoreMenuVisible(false);
+                  handleShare();
+                }}
+              >
+                <Feather name="share-2" size={18} color={Colors.textPrimary} style={{ marginRight: Spacing.md }} />
+                <Text style={styles.moreMenuOptionText}>Share Raw Text</Text>
+              </TouchableOpacity>
+
+              {/* PDF Option */}
+              <TouchableOpacity
+                style={styles.moreMenuOption}
+                onPress={() => {
+                  setMoreMenuVisible(false);
+                  handleExportPDF();
+                }}
+              >
+                <Feather name="file-text" size={18} color={Colors.textPrimary} style={{ marginRight: Spacing.md }} />
+                <Text style={styles.moreMenuOptionText}>Export print PDF</Text>
+              </TouchableOpacity>
+
+              {/* Anki Option (Flashcard templates only) */}
+              {session.templateId === "flashcards" && (
+                <TouchableOpacity
+                  style={styles.moreMenuOption}
+                  onPress={() => {
+                    setMoreMenuVisible(false);
+                    handleExportAnki();
+                  }}
+                >
+                  <Feather name="layers" size={18} color={Colors.textPrimary} style={{ marginRight: Spacing.md }} />
+                  <Text style={styles.moreMenuOptionText}>Export to Anki</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.modalBtnCancel, { marginTop: Spacing.xs }]}
+              onPress={() => setMoreMenuVisible(false)}
             >
               <Text style={styles.modalBtnCancelText}>Cancel</Text>
             </TouchableOpacity>
@@ -2596,5 +2691,18 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textAlignVertical: "top",
     marginTop: Spacing.xs,
+  },
+  moreMenuOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    width: "100%",
+  },
+  moreMenuOptionText: {
+    fontSize: FontSize.sm,
+    color: Colors.textPrimary,
+    fontWeight: FontWeight.semibold,
   },
 });
