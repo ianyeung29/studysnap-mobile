@@ -271,6 +271,67 @@ export default function LibraryScreen() {
     Alert.alert("Success", `Created parent folder "${name}"! Assign sub-folders to view it.`);
   };
 
+  const handleDeleteParent = (parentName: string) => {
+    Alert.alert(
+      "Remove Parent Folder",
+      `Are you sure you want to remove the parent folder "${parentName}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove Folder (Keep Classes)",
+          style: "default",
+          onPress: () => removeParentKeepSessions(parentName),
+        },
+        {
+          text: "Delete Folder & All Sessions",
+          style: "destructive",
+          onPress: () => deleteParentAndSessions(parentName),
+        },
+      ]
+    );
+  };
+
+  const removeParentKeepSessions = async (parentName: string) => {
+    try {
+      const updated = sessions.map((s) => {
+        if ((s.parentFolder || "General Folders") === parentName) {
+          return { ...s, parentFolder: "General Folders" };
+        }
+        return s;
+      });
+
+      const updatedOrder = parentOrder.filter((p) => p !== parentName);
+      setParentOrder(updatedOrder);
+
+      const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+      await AsyncStorage.setItem("studysnap_parent_order", JSON.stringify(updatedOrder));
+      await saveSessions(updated);
+      setSessions(updated);
+
+      Alert.alert("Success", `Folder removed. Classes moved to General Folders.`);
+    } catch {
+      Alert.alert("Error", "Could not remove folder.");
+    }
+  };
+
+  const deleteParentAndSessions = async (parentName: string) => {
+    try {
+      const updated = sessions.filter((s) => (s.parentFolder || "General Folders") !== parentName);
+
+      const updatedOrder = parentOrder.filter((p) => p !== parentName);
+      setParentOrder(updatedOrder);
+
+      const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+      await AsyncStorage.setItem("studysnap_parent_order", JSON.stringify(updatedOrder));
+      await saveSessions(updated);
+      setSessions(updated);
+
+      Alert.alert("Success", `Folder and all nested sessions deleted.`);
+    } catch {
+      Alert.alert("Error", "Could not delete folder.");
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
@@ -350,6 +411,13 @@ export default function LibraryScreen() {
                         }}
                       >
                         <Text style={styles.renameBtnText}>✏️</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.renameBtn, { backgroundColor: "rgba(239,68,68,0.12)", borderColor: "rgba(239,68,68,0.2)" }]}
+                        onPress={() => handleDeleteParent(parent.name)}
+                      >
+                        <Text style={[styles.renameBtnText, { color: Colors.error }]}>🗑️</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -510,6 +578,24 @@ export default function LibraryScreen() {
               placeholder="e.g. Spring 2026"
               placeholderTextColor={Colors.textMuted}
             />
+
+            {/* Quick Select Parent Folder Chips */}
+            <Text style={styles.modalInputLabel}>Or Select Existing Folder:</Text>
+            <View style={styles.chipsContainer}>
+              {Array.from(new Set([
+                "General Folders",
+                ...parentOrder,
+                ...sessions.map((s) => s.parentFolder || "General Folders")
+              ].filter(Boolean))).map((p) => (
+                <TouchableOpacity
+                  key={p}
+                  style={[styles.chip, newSubParent === p && styles.chipActive]}
+                  onPress={() => setNewSubParent(p)}
+                >
+                  <Text style={[styles.chipText, newSubParent === p && styles.chipTextActive]}>{p}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setEditSubModalVisible(false)}>
@@ -854,5 +940,34 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: FontWeight.bold,
     fontSize: FontSize.sm,
+  },
+
+  // Quick Select Parent Chips
+  chipsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+    marginVertical: Spacing.xs,
+    width: "100%",
+  },
+  chip: {
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+  },
+  chipActive: {
+    backgroundColor: "rgba(168,85,247,0.15)",
+    borderColor: Colors.accent3,
+  },
+  chipText: {
+    fontSize: 10,
+    color: Colors.textSecondary,
+    fontWeight: FontWeight.semibold,
+  },
+  chipTextActive: {
+    color: Colors.accent3,
   },
 });
