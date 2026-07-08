@@ -27,9 +27,11 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   return finalStatus === "granted";
 }
 
-export async function scheduleSpacedRepetitionReminders(
+export async function scheduleCustomReminder(
   sessionId: string,
-  sessionTitle: string
+  sessionTitle: string,
+  seconds: number,
+  timeLabel: string
 ): Promise<boolean> {
   const hasPermission = await requestNotificationPermissions();
   if (!hasPermission) {
@@ -44,54 +46,27 @@ export async function scheduleSpacedRepetitionReminders(
     // Cancel any existing notifications for this session to avoid duplicates
     await cancelRemindersForSession(sessionId);
 
-    // Schedule 1 Day (86400 seconds)
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "📚 StudySnap: 1-Day Review",
-        body: `Reviewing notes within 24 hours boosts retention by 80%. Let's review "${sessionTitle}"!`,
+        title: "📚 StudySnap: Study Session Reminder",
+        body: `Time to review "${sessionTitle}"! Keep up your study streak.`,
         data: { sessionId },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: 86400,
-      },
-    });
-
-    // Schedule 3 Days (259200 seconds)
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "🧠 StudySnap: 3-Day Reinforcement",
-        body: `Re-evaluate concepts in "${sessionTitle}" to move them to long-term memory!`,
-        data: { sessionId },
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: 259200,
-      },
-    });
-
-    // Schedule 7 Days (604800 seconds)
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "🎯 StudySnap: 7-Day Mastery",
-        body: `Final review for "${sessionTitle}". Run a quick flashcard deck session!`,
-        data: { sessionId },
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: 604800,
+        seconds: seconds,
       },
     });
 
     Alert.alert(
-      "Reminders Set! ⏰",
-      "Study reminders scheduled for 1, 3, and 7 days. Spaced repetition active!",
-      [{ text: "Awesome" }]
+      "Reminder Scheduled! ⏰",
+      `We will remind you to study this session in ${timeLabel}.`,
+      [{ text: "Great" }]
     );
     return true;
   } catch (error) {
-    console.error("Failed to schedule reminders:", error);
-    Alert.alert("Error", "Could not schedule study reminders.");
+    console.error("Failed to schedule custom reminder:", error);
+    Alert.alert("Error", "Could not schedule study reminder.");
     return false;
   }
 }

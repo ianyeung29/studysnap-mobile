@@ -71,6 +71,9 @@ export default function ResultsScreen() {
   // Immersive Reading Mode
   const [readingMaximized, setReadingMaximized] = useState(false);
 
+  // Custom Reminder Picker Modal
+  const [reminderModalVisible, setReminderModalVisible] = useState(false);
+
   // Stop speech on unmount
   const [isRetrying, setIsRetrying] = useState(false);
 
@@ -745,10 +748,16 @@ export default function ResultsScreen() {
     }
   };
 
-  const handleScheduleReminders = async () => {
+  const handleSetReminder = async (hours: number, label: string) => {
     if (!session) return;
-    const { scheduleSpacedRepetitionReminders } = await import("@/lib/notifications");
-    await scheduleSpacedRepetitionReminders(session.id, session.title);
+    try {
+      const { scheduleCustomReminder } = await import("@/lib/notifications");
+      const seconds = hours * 3600;
+      await scheduleCustomReminder(session.id, session.title, seconds, label);
+      setReminderModalVisible(false);
+    } catch (e) {
+      Alert.alert("Error", "Could not set reminder.");
+    }
   };
 
   if (!session) {
@@ -782,7 +791,7 @@ export default function ResultsScreen() {
                 <Text style={styles.title}>{session.title}</Text>
               )}
             </View>
-            <TouchableOpacity style={styles.ttsBtn} onPress={handleScheduleReminders}>
+            <TouchableOpacity style={styles.ttsBtn} onPress={() => setReminderModalVisible(true)}>
               <Text style={styles.ttsBtnIcon}>⏰</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.favoriteBtn} onPress={toggleFavorite}>
@@ -1022,6 +1031,77 @@ export default function ResultsScreen() {
                   </View>
                 </ScrollView>
               )}
+               {/* Immersive Fullscreen Reading Modal */}
+      <Modal
+        visible={readingMaximized}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => setReadingMaximized(false)}
+      >
+        <SafeAreaView style={[styles.safe, { backgroundColor: Colors.bgPrimary, flex: 1 }]}>
+          <View style={styles.fullscreenHeader}>
+            <Text style={styles.fullscreenTitle}>📖 Immersive Reading Mode</Text>
+            <TouchableOpacity
+              style={styles.fullscreenCloseBtn}
+              onPress={() => setReadingMaximized(false)}
+            >
+              <Text style={styles.fullscreenCloseText}>✕ Close</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.fullscreenScroll} contentContainerStyle={styles.fullscreenScrollContent}>
+            <MarkdownText text={editableContent} />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* User Custom Reminder Modal */}
+      <Modal
+        visible={reminderModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setReminderModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>⏰ Set Study Reminder</Text>
+              <TouchableOpacity onPress={() => setReminderModalVisible(false)}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>
+              Select when you would like to receive a notification to review this study session.
+            </Text>
+
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: Spacing.sm }}>
+                {[
+                  { label: "⚡ In 1 Hour (Quick review)", hours: 1, text: "1 hour" },
+                  { label: "🌅 Tomorrow Morning (In 18 hours)", hours: 18, text: "18 hours" },
+                  { label: "📅 In 3 Days", hours: 72, text: "3 days" },
+                  { label: "🗓️ In 1 Week", hours: 168, text: "1 week" },
+                  { label: "🎯 In 2 Weeks", hours: 336, text: "2 weeks" },
+                ].map((preset) => (
+                  <TouchableOpacity
+                    key={preset.hours}
+                    style={styles.reminderOptionBtn}
+                    onPress={() => handleSetReminder(preset.hours, preset.text)}
+                  >
+                    <Text style={styles.reminderOptionBtnText}>{preset.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.modalBtnCancel, { marginTop: Spacing.xs }]}
+              onPress={() => setReminderModalVisible(false)}
+            >
+              <Text style={styles.modalBtnCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
             </View>
           </>
         )}
@@ -2427,5 +2507,38 @@ const styles = StyleSheet.create({
   },
   headerIconBtnText: {
     fontSize: 14,
+  },
+
+  // Reminder Option buttons
+  reminderOptionBtn: {
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    alignItems: "center",
+  },
+  reminderOptionBtnText: {
+    fontSize: FontSize.sm,
+    color: Colors.textPrimary,
+    fontWeight: FontWeight.semibold,
+  },
+  modalBtn: {
+    backgroundColor: Colors.accent1,
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.xl,
+    alignItems: "center",
+  },
+  modalBtnCancel: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalBtnCancelText: {
+    color: Colors.textSecondary,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.sm,
   },
 });
