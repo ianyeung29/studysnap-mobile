@@ -6,6 +6,11 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  Linking,
+  Platform,
+  Alert,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useEffect, useState, useCallback } from "react";
@@ -19,6 +24,39 @@ export default function HomeScreen() {
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Feedback Modal States
+  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackType, setFeedbackType] = useState<"Suggestion" | "Problem">("Suggestion");
+
+  const handleSendFeedback = () => {
+    if (!feedbackText.trim()) {
+      Alert.alert("Error", "Please enter a message before sending.");
+      return;
+    }
+
+    const email = "support@studysnap.app";
+    const subject = encodeURIComponent(`[StudySnap Mobile] ${feedbackType}`);
+    const body = encodeURIComponent(
+      `Hey StudySnap Support Team,\n\nHere is my ${feedbackType.toLowerCase()}:\n\n${feedbackText}\n\nDevice OS: ${Platform.OS}\nDate: ${new Date().toLocaleDateString()}`
+    );
+
+    const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`;
+
+    Linking.canOpenURL(mailtoUrl).then((supported) => {
+      if (supported) {
+        Linking.openURL(mailtoUrl);
+        setFeedbackModalVisible(false);
+        setFeedbackText("");
+      } else {
+        Alert.alert(
+          "Email Client Not Found",
+          `We couldn't open your native mail application. Please copy our address and send your feedback directly to: ${email}`
+        );
+      }
+    });
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -40,6 +78,14 @@ export default function HomeScreen() {
       >
         {/* Hero */}
         <View style={styles.hero}>
+          <TouchableOpacity
+            style={styles.feedbackFloatBtn}
+            onPress={() => setFeedbackModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.feedbackFloatIcon}>💬 Feedback</Text>
+          </TouchableOpacity>
+
           <Text style={styles.logoEmoji}>⚡</Text>
           <Text style={styles.logoText}>
             Study<Text style={styles.logoAccent}>Snap</Text>
@@ -150,7 +196,7 @@ export default function HomeScreen() {
               >
                 <View style={styles.sessionIcon}>
                   <Text style={styles.sessionIconText}>
-                    {TEMPLATES[session.templateId as keyof typeof TEMPLATES]?.icon ?? "📚"}
+                    {TEMPLATES[session.templateId as keyof typeof TEMPLATES]?.icon || "📚"}
                   </Text>
                 </View>
                 <View style={styles.sessionInfo}>
@@ -158,7 +204,7 @@ export default function HomeScreen() {
                     {session.title}
                   </Text>
                   <Text style={styles.sessionMeta}>
-                    {formatDate(session.date)} · {formatDuration(session.durationSeconds)} · {session.photoCount} photo{session.photoCount !== 1 ? "s" : ""}
+                    {formatDate(session.date)} · {formatDuration(session.durationSeconds)}
                   </Text>
                 </View>
                 <Text style={styles.cardArrow}>›</Text>
@@ -360,5 +406,123 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold,
     color: Colors.textPrimary,
+  },
+
+  // Feedback float button
+  feedbackFloatBtn: {
+    position: "absolute",
+    top: Spacing.xs,
+    right: Spacing.xs,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  feedbackFloatIcon: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: FontWeight.bold,
+  },
+
+  // Feedback Modal Layout
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(10,10,15,0.8)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: Colors.bgCard,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: Spacing.md,
+    paddingBottom: Spacing["3xl"], // extra padding for bottom navigation bars
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  modalCloseText: {
+    fontSize: FontSize.lg,
+    color: Colors.textMuted,
+    padding: 4,
+  },
+  modalSubtitle: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    lineHeight: 16,
+  },
+  typeSelectorContainer: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginVertical: 4,
+  },
+  typeChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bgInput,
+    alignItems: "center",
+  },
+  typeChipActive: {
+    borderColor: Colors.accent3,
+    backgroundColor: "rgba(168,85,247,0.12)",
+  },
+  typeChipText: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    fontWeight: FontWeight.semibold,
+  },
+  typeChipTextActive: {
+    color: Colors.accent3,
+  },
+  feedbackInput: {
+    height: 120,
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    color: Colors.textPrimary,
+    fontSize: FontSize.sm,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  modalBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.accent1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBtnCancel: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalBtnCancelText: {
+    color: Colors.textSecondary,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.sm,
+  },
+  modalBtnText: {
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.sm,
   },
 });
