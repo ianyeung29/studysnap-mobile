@@ -51,6 +51,7 @@ export default function SessionScreen() {
   const [course, setCourse] = useState("");
   const [step, setStep] = useState<"recording" | "photos">("recording");
   const [recordedAudioUri, setRecordedAudioUri] = useState<string | null>(null);
+  const [markers, setMarkers] = useState<string[]>([]);
 
   // ── Start recording on mount ────────────────────────────────
   useEffect(() => {
@@ -229,6 +230,12 @@ export default function SessionScreen() {
     );
   };
 
+  const handleAddMarker = (type: string) => {
+    const timestamp = formatTime(seconds);
+    const marker = `[${type} at ${timestamp}]`;
+    setMarkers((prev) => [...prev, marker]);
+  };
+
   const handleFinalGenerate = useCallback(async () => {
     if (isGenerating) return;
     setIsGenerating(true);
@@ -248,6 +255,7 @@ export default function SessionScreen() {
           durationSeconds: String(seconds),
           templateId,
           course: course.trim(),
+          markers: JSON.stringify(markers),
         },
       });
     } catch (e) {
@@ -276,6 +284,46 @@ export default function SessionScreen() {
 
               <Text style={styles.timer}>{formatTime(seconds)}</Text>
               <Text style={styles.timerSub}>Lecture in progress</Text>
+            </View>
+
+            {/* Real-time markers during recording */}
+            <View style={styles.markersPanel}>
+              <Text style={styles.markersTitle}>📍 Mark Important Moments</Text>
+              <View style={styles.markerButtonsRow}>
+                <TouchableOpacity
+                  style={[styles.markerBtn, styles.markerBtnImportant]}
+                  onPress={() => handleAddMarker("Important")}
+                >
+                  <Text style={styles.markerBtnIcon}>⭐</Text>
+                  <Text style={styles.markerBtnText}>Important</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.markerBtn, styles.markerBtnConfused]}
+                  onPress={() => handleAddMarker("Confused")}
+                >
+                  <Text style={styles.markerBtnIcon}>❓</Text>
+                  <Text style={styles.markerBtnText}>Confused</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.markerBtn, styles.markerBtnExam]}
+                  onPress={() => handleAddMarker("Exam Hint")}
+                >
+                  <Text style={styles.markerBtnIcon}>🎯</Text>
+                  <Text style={styles.markerBtnText}>Exam Hint</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Display recent markers */}
+              {markers.length > 0 && (
+                <View style={styles.markersListCard}>
+                  <Text style={styles.markersListTitle}>Logged Markers ({markers.length}):</Text>
+                  <ScrollView style={styles.markersListScroll} nestedScrollEnabled>
+                    <Text style={styles.markersListText}>{markers.join("  ·  ")}</Text>
+                  </ScrollView>
+                </View>
+              )}
             </View>
 
             {/* Course / Subject Tag */}
@@ -691,5 +739,78 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textAlign: "center",
     lineHeight: 18,
+  },
+
+  // Real-time Markers
+  markersPanel: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+  },
+  markersTitle: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  markerButtonsRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    width: "100%",
+  },
+  markerBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    height: 48,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+  },
+  markerBtnImportant: {
+    backgroundColor: "rgba(245,158,11,0.08)",
+    borderColor: "rgba(245,158,11,0.3)",
+  },
+  markerBtnConfused: {
+    backgroundColor: "rgba(239,68,68,0.08)",
+    borderColor: "rgba(239,68,68,0.3)",
+  },
+  markerBtnExam: {
+    backgroundColor: "rgba(124,58,237,0.08)",
+    borderColor: "rgba(124,58,237,0.3)",
+  },
+  markerBtnIcon: {
+    fontSize: FontSize.sm,
+  },
+  markerBtnText: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  markersListCard: {
+    backgroundColor: Colors.bgInput,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: Spacing.xs,
+  },
+  markersListTitle: {
+    fontSize: 10,
+    fontWeight: FontWeight.bold,
+    color: Colors.textMuted,
+    letterSpacing: 0.5,
+  },
+  markersListScroll: {
+    maxHeight: 44,
+  },
+  markersListText: {
+    fontSize: 11,
+    color: Colors.accent3,
+    lineHeight: 16,
+    fontWeight: FontWeight.semibold,
   },
 });

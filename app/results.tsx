@@ -23,6 +23,7 @@ import * as Speech from "expo-speech";
 import * as FileSystem from "expo-file-system/legacy";
 import { TEMPLATES, TemplateId } from "@/lib/templates";
 import { summarize, transcribeAudio } from "@/lib/api";
+import MarkdownText from "@/components/MarkdownText";
 
 export default function ResultsScreen() {
   const router = useRouter();
@@ -43,10 +44,15 @@ export default function ResultsScreen() {
   const [userAnswer, setUserAnswer] = useState<string>("");
   const [checkingAnswer, setCheckingAnswer] = useState<boolean>(false);
 
-  // Flashcard Player State
+  // Flashcard Player & Mastery States
   const [cardPlayerVisible, setCardPlayerVisible] = useState(false);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [forgotCards, setForgotCards] = useState<number[]>([]);
+  const [hardCards, setHardCards] = useState<number[]>([]);
+  const [easyCards, setEasyCards] = useState<number[]>([]);
+  const [showScorecard, setShowScorecard] = useState(false);
+  const [onlyPracticeWeak, setOnlyPracticeWeak] = useState(false);
 
   // Stop speech on unmount
   const [isRetrying, setIsRetrying] = useState(false);
@@ -435,6 +441,29 @@ export default function ResultsScreen() {
     return parsed;
   };
 
+  const handleRateCard = (rating: "forgot" | "hard" | "easy", totalCards: number) => {
+    if (rating === "forgot") {
+      setForgotCards((prev) => [...prev.filter((i) => i !== currentCardIndex), currentCardIndex]);
+      setHardCards((prev) => prev.filter((i) => i !== currentCardIndex));
+      setEasyCards((prev) => prev.filter((i) => i !== currentCardIndex));
+    } else if (rating === "hard") {
+      setHardCards((prev) => [...prev.filter((i) => i !== currentCardIndex), currentCardIndex]);
+      setForgotCards((prev) => prev.filter((i) => i !== currentCardIndex));
+      setEasyCards((prev) => prev.filter((i) => i !== currentCardIndex));
+    } else {
+      setEasyCards((prev) => [...prev.filter((i) => i !== currentCardIndex), currentCardIndex]);
+      setForgotCards((prev) => prev.filter((i) => i !== currentCardIndex));
+      setHardCards((prev) => prev.filter((i) => i !== currentCardIndex));
+    }
+
+    if (currentCardIndex < totalCards - 1) {
+      setCurrentCardIndex((i) => i + 1);
+      setIsFlipped(false);
+    } else {
+      setShowScorecard(true);
+    }
+  };
+
   const handleExplainConcept = async () => {
     if (!conceptToExplain.trim()) {
       Alert.alert("Input Required", "Please type a concept to explain.");
@@ -579,6 +608,11 @@ export default function ResultsScreen() {
                   setCardPlayerVisible(true);
                   setCurrentCardIndex(0);
                   setIsFlipped(false);
+                  setForgotCards([]);
+                  setHardCards([]);
+                  setEasyCards([]);
+                  setShowScorecard(false);
+                  setOnlyPracticeWeak(false);
                 }}
               >
                 <Text style={styles.playCardsBtnText}>⚡ Start Study Practice Mode</Text>
@@ -597,7 +631,7 @@ export default function ResultsScreen() {
             ) : (
               <View style={styles.contentCard}>
                 <ScrollView style={styles.readOnlyScroll} nestedScrollEnabled>
-                  <Text style={styles.contentText}>{editableContent}</Text>
+                  <MarkdownText text={editableContent} />
                 </ScrollView>
               </View>
             )}
@@ -801,14 +835,92 @@ export default function ResultsScreen() {
               </View>
 
               {(() => {
-                const flashcardDeck = parseFlashcards(editableContent);
+                const fullDeck = parseFlashcards(editableContent);
+                const weakIndices = [...forgotCards, ...hardCards];
+                const flashcardDeck = onlyPracticeWeak 
+                  ? fullDeck.filter((_, idx) => weakIndices.includes(idx)) 
+                  : fullDeck;
+
                 if (flashcardDeck.length === 0) {
                   return (
                     <View style={styles.center}>
-                      <Text style={styles.explanationPlaceholder}>No flashcards parsed.</Text>
+                      <Text style={styles.explanationPlaceholder}>No cards to practice.</Text>
+                      <TouchableOpacity
+                        style={[styles.retryBtn, { marginTop: 12 }]}
+                        onPress={() => {
+                          setCardPlayerVisible(false);
+                        }}
+                      >
+                        <Text style={styles.retryBtnText}>Close</Text>
+                      </TouchableOpacity>
                     </View>
                   );
                 }
+
+                if (showScorecard) {
+                  const mastery = Math.round((easyCards.length / flashcardDeck.length) * 100);
+                  return (
+                    <View style={styles.scorecardContainer}>
+                      <Text style={styles.scorecardTitle}>🎉 Study Deck Completed!</Text>
+                      
+                      <View style={styles.masteryContainer}>
+                        <Text style={styles.masteryVal}>{mastery}%</Text>
+                        <Text style={styles.masterySub}>MASTERY SCORE</Text>
+                      </View>
+
+                      <View style={styles.statsRow}>
+                        <View style={styles.statBox}>
+                          <Text style={styles.statBoxNum}>{easyCards.length}</Text>
+                          <Text style={styles.statBoxLabel}>🟢 Easy</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                          <Text style={styles.statBoxNum}>{hardCards.length}</Text>
+                          <Text style={styles.statBoxLabel}>🟡 Hard</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                          <Text style={styles.statBoxNum}>{forgotCards.length}</Text>
+                          <Text style={styles.statBoxLabel}>🔴 Forgot</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.scorecardActions}>
+                        <TouchableOpacity
+                          style={styles.scorecardBtnPrimary}
+                          onPress={() => {
+                            setForgotCards([]);
+                            setHardCards([]);
+                            setEasyCards([]);
+                            setCurrentCardIndex(0);
+                            setIsFlipped(false);
+                            setShowScorecard(false);
+                            setOnlyPracticeWeak(false);
+                          }}
+                        >
+                          <Text style={styles.scorecardBtnText}>🔄 Restart Full Deck</Text>
+                        </TouchableOpacity>
+
+                        {(forgotCards.length > 0 || hardCards.length > 0) && !onlyPracticeWeak && (
+                          <TouchableOpacity
+                            style={[styles.scorecardBtnPrimary, styles.scorecardBtnSecondary]}
+                            onPress={() => {
+                              setOnlyPracticeWeak(true);
+                              setCurrentCardIndex(0);
+                              setIsFlipped(false);
+                              setShowScorecard(false);
+                              // Clear ratings for this targeted review
+                              setForgotCards([]);
+                              setHardCards([]);
+                              setEasyCards([]);
+                            }}
+                          >
+                            <Text style={styles.scorecardBtnText}>⚠️ Practice Weak Cards</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  );
+                }
+
                 return (
                   <>
                     <TouchableOpacity
@@ -819,6 +931,7 @@ export default function ResultsScreen() {
                       <View style={styles.cardInner}>
                         <Text style={styles.cardIndexLabel}>
                           CARD {currentCardIndex + 1} OF {flashcardDeck.length}
+                          {onlyPracticeWeak ? " (WEAK CARDS MODE)" : ""}
                         </Text>
                         
                         <Text style={styles.cardSideLabel}>
@@ -838,6 +951,32 @@ export default function ResultsScreen() {
                         </Text>
                       </View>
                     </TouchableOpacity>
+
+                    {/* Active Recall Rating Buttons when flipped */}
+                    {isFlipped && (
+                      <View style={styles.ratingRow}>
+                        <TouchableOpacity
+                          style={[styles.ratingBtn, styles.ratingBtnForgot]}
+                          onPress={() => handleRateCard("forgot", flashcardDeck.length)}
+                        >
+                          <Text style={styles.ratingBtnText}>Forgot 🔴</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.ratingBtn, styles.ratingBtnHard]}
+                          onPress={() => handleRateCard("hard", flashcardDeck.length)}
+                        >
+                          <Text style={styles.ratingBtnText}>Hard 🟡</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.ratingBtn, styles.ratingBtnEasy]}
+                          onPress={() => handleRateCard("easy", flashcardDeck.length)}
+                        >
+                          <Text style={styles.ratingBtnText}>Easy 🟢</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
 
                     <View style={styles.cardControlsRow}>
                       <TouchableOpacity
@@ -903,9 +1042,9 @@ const styles = StyleSheet.create({
   },
   headerTitleRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
   templateIcon: { fontSize: 32 },
-  titleInfo: { flex: 1 },
+  titleInfo: { flex: 1, marginRight: Spacing.xs },
   templateLabel: { fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.bold, letterSpacing: 1, textTransform: "uppercase" },
-  title: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  title: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, flexWrap: "wrap" },
   favoriteBtn: {
     padding: 8,
     borderRadius: Radius.sm,
@@ -1410,6 +1549,124 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   quizSubmitBtnText: {
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.sm,
+  },
+
+  // Active Recall Rating Row
+  ratingRow: {
+    flexDirection: "row",
+    gap: Spacing.xs,
+    width: "100%",
+    justifyContent: "space-between",
+    marginVertical: Spacing.sm,
+  },
+  ratingBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: Radius.md,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  ratingBtnForgot: {
+    backgroundColor: "rgba(239,68,68,0.12)",
+    borderColor: Colors.error,
+  },
+  ratingBtnHard: {
+    backgroundColor: "rgba(245,158,11,0.12)",
+    borderColor: Colors.accent3,
+  },
+  ratingBtnEasy: {
+    backgroundColor: "rgba(34,197,94,0.12)",
+    borderColor: Colors.success,
+  },
+  ratingBtnText: {
+    fontSize: 11,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+
+  // Flashcard Mastery Scorecard
+  scorecardContainer: {
+    width: "100%",
+    padding: Spacing.md,
+    alignItems: "center",
+    gap: Spacing.lg,
+  },
+  scorecardTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+    textAlign: "center",
+  },
+  masteryContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 4,
+    borderColor: Colors.accent3,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(168,85,247,0.06)",
+  },
+  masteryVal: {
+    fontSize: FontSize["2xl"],
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  masterySub: {
+    fontSize: 8,
+    fontWeight: FontWeight.bold,
+    color: Colors.textMuted,
+    marginTop: 2,
+    letterSpacing: 0.5,
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    justifyContent: "space-between",
+    width: "100%",
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: Colors.bgInput,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: Spacing.sm,
+    alignItems: "center",
+    gap: 2,
+  },
+  statBoxNum: {
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  statBoxLabel: {
+    fontSize: 10,
+    color: Colors.textMuted,
+  },
+  scorecardActions: {
+    width: "100%",
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  scorecardBtnPrimary: {
+    width: "100%",
+    height: 48,
+    backgroundColor: Colors.accent1,
+    borderRadius: Radius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scorecardBtnSecondary: {
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  scorecardBtnText: {
     color: Colors.white,
     fontWeight: FontWeight.bold,
     fontSize: FontSize.sm,
