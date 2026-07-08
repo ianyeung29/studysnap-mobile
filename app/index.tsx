@@ -63,6 +63,39 @@ export default function HomeScreen() {
           <Text style={styles.startBtnArrow}>→</Text>
         </TouchableOpacity>
 
+        {/* Secondary Import CTA */}
+        <TouchableOpacity
+          style={styles.importBtn}
+          onPress={async () => {
+            try {
+              const DocumentPicker = await import("expo-document-picker");
+              const result = await DocumentPicker.getDocumentAsync({
+                type: "audio/*",
+                copyToCacheDirectory: true,
+              });
+
+              if (result.canceled || !result.assets || result.assets.length === 0) {
+                return;
+              }
+
+              const selectedAsset = result.assets[0];
+              router.push({
+                pathname: "/session",
+                params: {
+                  preloadedAudioUri: selectedAsset.uri,
+                },
+              });
+            } catch (err) {
+              const Alert = (await import("react-native")).Alert;
+              Alert.alert("Import Failed", "Could not load audio file.");
+            }
+          }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.importBtnIcon}>📁</Text>
+          <Text style={styles.importBtnText}>Import Pre-recorded Audio File</Text>
+        </TouchableOpacity>
+
         {/* How it works */}
         <View style={styles.steps}>
           {[
@@ -298,5 +331,27 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 18,
     paddingHorizontal: Spacing.lg,
+  },
+
+  importBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: Colors.borderAccent,
+    borderRadius: Radius.xl,
+    paddingVertical: 14,
+    width: "100%",
+    marginBottom: Spacing.md,
+  },
+  importBtnIcon: {
+    fontSize: 18,
+  },
+  importBtnText: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textPrimary,
   },
 });

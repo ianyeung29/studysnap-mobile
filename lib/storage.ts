@@ -64,3 +64,12 @@ export function formatDate(isoString: string): string {
     year: "numeric",
   });
 }
+
+export async function updateSession(session: Session): Promise<void> {
+  const sessions = await loadSessions();
+  const index = sessions.findIndex((s) => s.id === session.id);
+  if (index !== -1) {
+    sessions[index] = session;
+    await saveSessions(sessions);
+  }
+}

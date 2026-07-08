@@ -122,6 +122,53 @@ export default function ResultsScreen() {
       setIsRetrying(false);
     }
   };
+
+  const handleReimportAudio = async () => {
+    if (!session) return;
+    try {
+      const DocumentPicker = await import("expo-document-picker");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "audio/*",
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const selectedAsset = result.assets[0];
+      const audioDir = `${FileSystem.documentDirectory}audio/`;
+      const dirInfo = await FileSystem.getInfoAsync(audioDir);
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(audioDir, { intermediates: true });
+      }
+
+      // Copy picked audio file to permanent storage
+      const destUri = `${audioDir}${Date.now()}.m4a`;
+      await FileSystem.copyAsync({
+        from: selectedAsset.uri,
+        to: destUri,
+      });
+
+      // Update the session in AsyncStorage
+      const { loadSessions, updateSession } = await import("@/lib/storage");
+      const sessions = await loadSessions();
+      const currentSession = sessions.find((s) => s.id === session.id);
+      if (currentSession) {
+        currentSession.audioUri = destUri;
+        // Since the user is importing a fresh audio file, clear any rawTranscript from the old failed file so we force re-transcribing it!
+        currentSession.rawTranscript = "";
+        await updateSession(currentSession);
+        // Update local session state to trigger re-render
+        setSession(currentSession);
+        Alert.alert("Success", "Audio file successfully re-imported! Tap 'Retry AI Generation' to process it.");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to import file.";
+      Alert.alert("Import Failed", msg);
+    }
+  };
+
   useEffect(() => {
     return () => {
       Speech.stop();
@@ -559,13 +606,23 @@ export default function ResultsScreen() {
                 <Text style={styles.retryLoaderText}>Compiling study guide...</Text>
               </View>
             ) : (
-              <TouchableOpacity
-                style={styles.retryBtn}
-                onPress={handleRetryGeneration}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.retryBtnText}>🔄 Retry AI Generation</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  style={styles.retryBtn}
+                  onPress={handleRetryGeneration}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.retryBtnText}>🔄 Retry AI Generation</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.retryBtn, { backgroundColor: Colors.bgSecondary, borderWidth: 1, borderColor: Colors.border }]}
+                  onPress={handleReimportAudio}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.retryBtnText, { color: Colors.textPrimary }]}>📁 Re-import Audio File</Text>
+                </TouchableOpacity>
+              </>
             )}
           </View>
         ) : (

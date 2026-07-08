@@ -10,7 +10,7 @@ import {
   Platform,
   TextInput,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from "expo-audio";
@@ -32,6 +32,7 @@ type RecordingStatus = "requesting" | "recording" | "stopped";
 
 export default function SessionScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ preloadedAudioUri?: string }>();
 
   // Recording state
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -53,16 +54,24 @@ export default function SessionScreen() {
   const [recordedAudioUri, setRecordedAudioUri] = useState<string | null>(null);
   const [markers, setMarkers] = useState<string[]>([]);
 
-  // ── Start recording on mount ────────────────────────────────
+  // ── Start recording on mount (or load preloaded audio) ────────
   useEffect(() => {
-    startRecording();
+    if (params.preloadedAudioUri) {
+      setRecordedAudioUri(params.preloadedAudioUri);
+      setStep("photos");
+      setStatus("stopped");
+      setSeconds(300); // Default class length for imported files
+      isRecordingStoppedRef.current = true;
+    } else {
+      startRecording();
+    }
     return () => {
       stopTimer();
       if (!isRecordingStoppedRef.current) {
         recorder.stop().catch(() => {});
       }
     };
-  }, [recorder]);
+  }, [recorder, params.preloadedAudioUri]);
 
   const startRecording = async () => {
     try {
