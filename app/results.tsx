@@ -58,6 +58,15 @@ export default function ResultsScreen() {
   const [showScorecard, setShowScorecard] = useState(false);
   const [onlyPracticeWeak, setOnlyPracticeWeak] = useState(false);
 
+  // Practice Quiz States
+  const [quizPlayerVisible, setQuizPlayerVisible] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [isQuestionRevealed, setIsQuestionRevealed] = useState(false);
+  const [quizUserAnswer, setQuizUserAnswer] = useState("");
+  const [quizCorrectCount, setQuizCorrectCount] = useState(0);
+  const [quizWrongCount, setQuizWrongCount] = useState(0);
+  const [quizFinished, setQuizFinished] = useState(false);
+
   // Stop speech on unmount
   const [isRetrying, setIsRetrying] = useState(false);
 
@@ -623,6 +632,48 @@ export default function ResultsScreen() {
     return parsed;
   };
 
+  const parseQuizQuestions = (markdown: string): { question: string; answer: string }[] => {
+    const sections = markdown.split("---");
+    const parsed: { question: string; answer: string }[] = [];
+    for (const section of sections) {
+      const lines = section.split("\n");
+      let question = "";
+      let answer = "";
+      let isReadingQ = false;
+      let isReadingHighlight = false;
+
+      for (const line of lines) {
+        const cleaned = line.trim();
+        const lower = cleaned.toLowerCase();
+
+        if (lower.startsWith("q:") || lower.startsWith("question:") || lower.startsWith("question ")) {
+          const idx = cleaned.indexOf(":") !== -1 ? cleaned.indexOf(":") : 8;
+          question = cleaned.substring(idx + 1).trim();
+          isReadingQ = true;
+          isReadingHighlight = false;
+        } else if (lower.startsWith("a:") || lower.startsWith("answer:") || lower.startsWith("answer ")) {
+          const idx = cleaned.indexOf(":") !== -1 ? cleaned.indexOf(":") : 6;
+          answer = cleaned.substring(idx + 1).trim();
+          isReadingQ = false;
+          isReadingHighlight = true;
+        } else if (cleaned) {
+          if (isReadingQ) {
+            question += " " + cleaned;
+          } else if (isReadingHighlight) {
+            answer += " " + cleaned;
+          }
+        }
+      }
+
+      const cleanQ = question.replace(/[#*`_~]/g, "").trim();
+      const cleanA = answer.replace(/[#*`_~]/g, "").trim();
+      if (cleanQ && cleanA) {
+        parsed.push({ question: cleanQ, answer: cleanA });
+      }
+    }
+    return parsed;
+  };
+
   const handleRateCard = (rating: "forgot" | "hard" | "easy", totalCards: number) => {
     if (rating === "forgot") {
       setForgotCards((prev) => [...prev.filter((i) => i !== currentCardIndex), currentCardIndex]);
@@ -835,6 +886,23 @@ export default function ResultsScreen() {
               </TouchableOpacity>
             )}
 
+            {session.templateId === "exam-prep" && (
+              <TouchableOpacity
+                style={[styles.playCardsBtn, { backgroundColor: Colors.accent2 }]}
+                onPress={() => {
+                  setQuizPlayerVisible(true);
+                  setCurrentQuestionIndex(0);
+                  setIsQuestionRevealed(false);
+                  setQuizUserAnswer("");
+                  setQuizCorrectCount(0);
+                  setQuizWrongCount(0);
+                  setQuizFinished(false);
+                }}
+              >
+                <Text style={styles.playCardsBtnText}>✍️ Start Interactive Practice Quiz</Text>
+              </TouchableOpacity>
+            )}
+
             {/* Content Box */}
             {isEditing ? (
               <TextInput
@@ -1032,6 +1100,185 @@ export default function ResultsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Interactive Practice Quiz Modal */}
+      {session.templateId === "exam-prep" && (
+        <Modal
+          visible={quizPlayerVisible}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setQuizPlayerVisible(false)}
+        >
+          <View style={styles.cardOverlay}>
+            <View style={styles.cardPlayerContainer}>
+              <View style={styles.cardPlayerHeader}>
+                <Text style={styles.cardPlayerTitle}>✍️ Exam Prep Practice</Text>
+                <TouchableOpacity onPress={() => setQuizPlayerVisible(false)}>
+                  <Text style={styles.cardPlayerClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {(() => {
+                const questions = parseQuizQuestions(editableContent);
+                if (questions.length === 0) {
+                  return (
+                    <View style={styles.center}>
+                      <Text style={styles.explanationPlaceholder}>No questions parsed.</Text>
+                      <TouchableOpacity
+                        style={[styles.retryBtn, { marginTop: 12 }]}
+                        onPress={() => setQuizPlayerVisible(false)}
+                      >
+                        <Text style={styles.retryBtnText}>Close</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }
+
+                if (quizFinished) {
+                  const scorePercent = Math.round((quizCorrectCount / questions.length) * 100);
+                  return (
+                    <View style={styles.scorecardContainer}>
+                      <Text style={styles.scorecardTitle}>🎉 Quiz Completed!</Text>
+                      
+                      <View style={[styles.masteryContainer, { borderColor: Colors.accent2, backgroundColor: "rgba(236,72,153,0.06)" }]}>
+                        <Text style={styles.masteryVal}>{scorePercent}%</Text>
+                        <Text style={styles.masterySub}>ACCURACY SCORE</Text>
+                      </View>
+
+                      <View style={styles.statsRow}>
+                        <View style={[styles.statBox, { borderColor: Colors.success }]}>
+                          <Text style={styles.statBoxNum}>{quizCorrectCount}</Text>
+                          <Text style={styles.statBoxLabel}>🟢 Correct</Text>
+                        </View>
+                        <View style={[styles.statBox, { borderColor: Colors.error }]}>
+                          <Text style={styles.statBoxNum}>{quizWrongCount}</Text>
+                          <Text style={styles.statBoxLabel}>🔴 Incorrect</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.scorecardActions}>
+                        <TouchableOpacity
+                          style={[styles.scorecardBtnPrimary, { backgroundColor: Colors.accent2 }]}
+                          onPress={() => {
+                            setCurrentQuestionIndex(0);
+                            setIsQuestionRevealed(false);
+                            setQuizUserAnswer("");
+                            setQuizCorrectCount(0);
+                            setQuizWrongCount(0);
+                            setQuizFinished(false);
+                          }}
+                        >
+                          <Text style={styles.scorecardBtnText}>🔄 Restart Quiz</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.scorecardBtnSecondary}
+                          onPress={() => setQuizPlayerVisible(false)}
+                        >
+                          <Text style={[styles.scorecardBtnText, { color: Colors.textPrimary }]}>✕ Close Dashboard</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                }
+
+                const currentItem = questions[currentQuestionIndex];
+
+                return (
+                  <>
+                    <View style={styles.quizQuestionCard}>
+                      <Text style={styles.cardIndexLabel}>
+                        QUESTION {currentQuestionIndex + 1} OF {questions.length}
+                      </Text>
+                      
+                      <ScrollView style={styles.quizQuestionScroll}>
+                        <Text style={styles.quizQuestionText}>{currentItem?.question}</Text>
+                      </ScrollView>
+
+                      {!isQuestionRevealed ? (
+                        <View style={styles.quizInputContainer}>
+                          <Text style={styles.quizTextLabel}>Write Your Answer:</Text>
+                          <TextInput
+                            style={styles.quizTextarea}
+                            value={quizUserAnswer}
+                            onChangeText={setQuizUserAnswer}
+                            placeholder="Type your response here to test active recall..."
+                            placeholderTextColor={Colors.textMuted}
+                            multiline
+                          />
+                          <TouchableOpacity
+                            style={[styles.quizActionBtn, { backgroundColor: Colors.accent2 }]}
+                            onPress={() => setIsQuestionRevealed(true)}
+                          >
+                            <Text style={styles.quizActionBtnText}>👁️ Check Answer</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <View style={styles.quizReviewContainer}>
+                          <Text style={styles.quizTextLabel}>Your Answer:</Text>
+                          <Text style={styles.quizUserAnswerReview}>{quizUserAnswer || "(Empty)"}</Text>
+
+                          <Text style={[styles.quizTextLabel, { marginTop: Spacing.sm }]}>Correct Answer & Key Points:</Text>
+                          <ScrollView style={styles.quizExplanationScroll}>
+                            <Text style={styles.quizCorrectAnswerText}>{currentItem?.answer}</Text>
+                          </ScrollView>
+
+                          <Text style={styles.gradePrompt}>Did you answer correctly?</Text>
+                          <View style={styles.gradeButtonsRow}>
+                            <TouchableOpacity
+                              style={[styles.gradeBtn, styles.gradeBtnWrong]}
+                              onPress={() => {
+                                setQuizWrongCount((w) => w + 1);
+                                if (currentQuestionIndex < questions.length - 1) {
+                                  setCurrentQuestionIndex((i) => i + 1);
+                                  setIsQuestionRevealed(false);
+                                  setQuizUserAnswer("");
+                                } else {
+                                  setQuizFinished(true);
+                                }
+                              }}
+                            >
+                              <Text style={styles.gradeBtnText}>🔴 I Missed It</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={[styles.gradeBtn, styles.gradeBtnRight]}
+                              onPress={() => {
+                                setQuizCorrectCount((c) => c + 1);
+                                if (currentQuestionIndex < questions.length - 1) {
+                                  setCurrentQuestionIndex((i) => i + 1);
+                                  setIsQuestionRevealed(false);
+                                  setQuizUserAnswer("");
+                                } else {
+                                  setQuizFinished(true);
+                                }
+                              }}
+                            >
+                              <Text style={styles.gradeBtnText}>🟢 I Got It Right</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={styles.progressBarBg}>
+                      <View
+                        style={[
+                          styles.progressBarFill,
+                          {
+                            backgroundColor: Colors.accent2,
+                            width: `${((currentQuestionIndex + 1) / questions.length) * 100}%`,
+                          },
+                        ]}
+                      />
+                    </View>
+                  </>
+                );
+              })()}
+            </View>
+          </View>
+        </Modal>
+      )}
 
       {/* Interactive Flashcard Player Modal */}
       {session.templateId === "flashcards" && (
@@ -1925,5 +2172,129 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     fontWeight: FontWeight.bold,
     flex: 1,
+  },
+
+  // Interactive Quiz Layout
+  quizQuestionCard: {
+    flex: 1,
+    width: "100%",
+    backgroundColor: Colors.bgInput,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.md,
+    marginVertical: Spacing.sm,
+  },
+  quizQuestionScroll: {
+    maxHeight: 90,
+    width: "100%",
+    marginVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    paddingBottom: Spacing.xs,
+  },
+  quizQuestionText: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.bold,
+    lineHeight: 22,
+  },
+  quizInputContainer: {
+    flex: 1,
+    width: "100%",
+    gap: Spacing.sm,
+  },
+  quizTextLabel: {
+    fontSize: 11,
+    fontWeight: FontWeight.bold,
+    color: Colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  quizTextarea: {
+    backgroundColor: Colors.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    color: Colors.textPrimary,
+    fontSize: FontSize.sm,
+    minHeight: 100,
+    textAlignVertical: "top",
+  },
+  quizActionBtn: {
+    height: 44,
+    borderRadius: Radius.md,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: Spacing.xs,
+  },
+  quizActionBtnText: {
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.sm,
+  },
+  quizReviewContainer: {
+    flex: 1,
+    width: "100%",
+    gap: Spacing.xs,
+  },
+  quizUserAnswerReview: {
+    color: Colors.textSecondary,
+    fontSize: FontSize.sm,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    padding: Spacing.sm,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    fontStyle: "italic",
+  },
+  quizExplanationScroll: {
+    maxHeight: 100,
+    backgroundColor: "rgba(236,72,153,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(236,72,153,0.15)",
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginVertical: 4,
+  },
+  quizCorrectAnswerText: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+  },
+  gradePrompt: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+    textAlign: "center",
+    marginVertical: Spacing.sm,
+  },
+  gradeButtonsRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    width: "100%",
+    justifyContent: "space-between",
+  },
+  gradeBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: Radius.md,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  gradeBtnWrong: {
+    backgroundColor: "rgba(239,68,68,0.12)",
+    borderColor: Colors.error,
+  },
+  gradeBtnRight: {
+    backgroundColor: "rgba(34,197,94,0.12)",
+    borderColor: Colors.success,
+  },
+  gradeBtnText: {
+    color: Colors.textPrimary,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.sm,
   },
 });
