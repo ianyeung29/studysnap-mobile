@@ -871,7 +871,7 @@ export default function ResultsScreen() {
             {isEditing ? (
               <View style={styles.contentCard}>
                 <View style={styles.contentCardHeader}>
-                  <Text style={styles.contentCardTitle}>✍️ Edit Study Summary</Text>
+                  <Text style={styles.contentCardTitle}>✍️ Edit Summy</Text>
                   <View style={styles.headerActionsToolbar}>
                     <TouchableOpacity
                       style={[styles.headerTextBtn, styles.headerTextBtnCancel]}
@@ -900,7 +900,7 @@ export default function ResultsScreen() {
             ) : (
               <View style={styles.contentCard}>
                 <View style={styles.contentCardHeader}>
-                  <Text style={styles.contentCardTitle}>📖 Study Summary</Text>
+                  <Text style={styles.contentCardTitle}>📖 Summy</Text>
                   <View style={styles.headerActionsToolbar}>
                     {/* ELI5 Tutor Button */}
                     <TouchableOpacity
