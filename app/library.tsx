@@ -19,6 +19,8 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme
 import { loadSessions, saveSessions, addSession, Session, formatDate } from "@/lib/storage";
 import { TEMPLATES } from "@/lib/templates";
 import { summarize } from "../lib/api";
+import { subscriptionService } from "@/lib/subscription";
+import SubscriptionPaywall from "@/components/SubscriptionPaywall";
 import BottomNav from "@/components/BottomNav";
 
 export default function LibraryScreen() {
@@ -60,10 +62,19 @@ export default function LibraryScreen() {
   const [selectedCourseMenuIdx, setSelectedCourseMenuIdx] = useState<number>(-1);
   const [totalCoursesInParent, setTotalCoursesInParent] = useState<number>(0);
 
+  // Premium / Subscription states
+  const [isPremium, setIsPremium] = useState(false);
+  const [paywallVisible, setPaywallVisible] = useState(false);
+
   // Master Compiler Loading state
   const [compilingSub, setCompilingSub] = useState<{ parent: string; name: string } | null>(null);
 
   const handleCompileMasterExam = async (parentFolderName: string, courseName: string) => {
+    if (!isPremium) {
+      setPaywallVisible(true);
+      return;
+    }
+
     // Find all sessions in this sub-folder (excluding other master guides)
     const courseSessions = sessions.filter(
       (s) =>
@@ -151,6 +162,7 @@ ${combinedTexts}`;
     }
   };
 
+  // Re-verify premium entitlement on screen focus
   useFocusEffect(
     useCallback(() => {
       const init = async () => {
@@ -167,6 +179,11 @@ ${combinedTexts}`;
         if (sOrderRaw) {
           setSubOrderMap(JSON.parse(sOrderRaw));
         }
+        
+        // Entitlement check
+        const entitlement = await subscriptionService.getEntitlement();
+        setIsPremium(entitlement.isActive);
+
         setLoading(false);
       };
       init();
@@ -942,6 +959,15 @@ ${combinedTexts}`;
         </View>
       </Modal>
 
+      <SubscriptionPaywall
+        visible={paywallVisible}
+        onClose={() => setPaywallVisible(false)}
+        onPurchaseSuccess={async () => {
+          const entitlement = await subscriptionService.getEntitlement();
+          setIsPremium(entitlement.isActive);
+        }}
+      />
+
       {/* Sleek Bottom Navigation */}
       <BottomNav currentTab="library" />
     </SafeAreaView>
@@ -993,7 +1019,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: Platform.OS === "ios" ? 100 : 86,
+    paddingBottom: 110,
   },
   emptyCard: {
     backgroundColor: Colors.bgCard,
