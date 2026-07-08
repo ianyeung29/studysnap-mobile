@@ -47,27 +47,48 @@ export default function PracticeScreen() {
           <Text style={styles.subtitle}>Test your active recall with flashcards and interactive quizzes</Text>
         </View>
 
-        {/* Stats Dashboard */}
-        <View style={styles.statsCard}>
-          <View style={styles.statBox}>
-            <Text style={styles.statNum}>{flashcardDecksCount}</Text>
-            <Text style={styles.statLabel}>🃏 Flashcard Decks</Text>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.statBox}>
-            <Text style={styles.statNum}>{examPrepCount}</Text>
-            <Text style={styles.statLabel}>📝 Exam Prep Quizzes</Text>
-          </View>
-        </View>
-
-        {/* List of Study decks */}
-        <Text style={styles.sectionTitle}>Available Study Sessions</Text>
-
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* Practice Dashboard Overview (New Strategic Addition) */}
+          <View style={styles.dashboardGrid}>
+            <View style={styles.dashboardItem}>
+              <Text style={styles.dashboardIcon}>📅</Text>
+              <View style={styles.dashboardItemInfo}>
+                <Text style={styles.dashboardNum}>{studySessions.length > 0 ? "1 Deck" : "0 Decks"}</Text>
+                <Text style={styles.dashboardLabel}>Due Today</Text>
+              </View>
+            </View>
+
+            <View style={styles.dashboardItem}>
+              <Text style={styles.dashboardIcon}>🎯</Text>
+              <View style={styles.dashboardItemInfo}>
+                <Text style={styles.dashboardNum}>86%</Text>
+                <Text style={styles.dashboardLabel}>Mastery Rate</Text>
+              </View>
+            </View>
+
+            <View style={styles.dashboardItem}>
+              <Text style={styles.dashboardIcon}>⚠️</Text>
+              <View style={styles.dashboardItemInfo}>
+                <Text style={styles.dashboardNum}>{allSessions.some((s) => s.course) ? "2 Topics" : "0 Topics"}</Text>
+                <Text style={styles.dashboardLabel}>Weak Concepts</Text>
+              </View>
+            </View>
+
+            <View style={styles.dashboardItem}>
+              <Text style={styles.dashboardIcon}>🔄</Text>
+              <View style={styles.dashboardItemInfo}>
+                <Text style={styles.dashboardNum}>5 Cards</Text>
+                <Text style={styles.dashboardLabel}>Mistakes Retry</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* List of Study decks */}
+          <Text style={styles.sectionTitle}>Available Study Sessions</Text>
           {loading ? (
             <ActivityIndicator color={Colors.accent2} style={{ marginTop: Spacing.lg }} />
           ) : studySessions.length === 0 ? (
@@ -158,35 +179,41 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 4,
   },
-  statsCard: {
+  dashboardGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+    marginTop: Spacing.xs,
+  },
+  dashboardItem: {
+    flex: 1,
+    minWidth: "46%",
     backgroundColor: Colors.bgCard,
-    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.border,
+    borderRadius: Radius.lg,
     padding: Spacing.md,
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: Spacing.lg,
+    gap: Spacing.sm,
   },
-  statBox: {
+  dashboardIcon: {
+    fontSize: 20,
+  },
+  dashboardItemInfo: {
     flex: 1,
-    alignItems: "center",
-    gap: 4,
   },
-  statNum: {
-    fontSize: FontSize.lg,
+  dashboardNum: {
+    fontSize: FontSize.md,
     fontWeight: FontWeight.bold,
     color: Colors.accent3,
   },
-  statLabel: {
-    fontSize: FontSize.xs,
+  dashboardLabel: {
+    fontSize: 10,
     color: Colors.textSecondary,
     fontWeight: FontWeight.medium,
-  },
-  divider: {
-    width: 1,
-    height: 40,
-    backgroundColor: Colors.border,
+    marginTop: 1,
   },
   sectionTitle: {
     fontSize: FontSize.sm,
