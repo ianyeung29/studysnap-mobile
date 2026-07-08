@@ -68,6 +68,9 @@ export default function ResultsScreen() {
   const [quizWrongCount, setQuizWrongCount] = useState(0);
   const [quizFinished, setQuizFinished] = useState(false);
 
+  // Immersive Reading Mode
+  const [readingMaximized, setReadingMaximized] = useState(false);
+
   // Stop speech on unmount
   const [isRetrying, setIsRetrying] = useState(false);
 
@@ -886,10 +889,36 @@ export default function ResultsScreen() {
               )}
             </View>
 
-            {/* Content Box */}
+             {/* Content Box */}
+            {isEditing ? (
+              <TextInput
+                style={[styles.textarea, styles.contentArea]}
+                value={editableContent}
+                onChangeText={setEditableContent}
+                multiline
+                textAlignVertical="top"
+              />
+            ) : (
+              <View style={styles.contentCard}>
+                <View style={styles.contentCardHeader}>
+                  <Text style={styles.contentCardTitle}>📖 Study Summary</Text>
+                  <TouchableOpacity
+                    style={styles.maximizeBtn}
+                    onPress={() => setReadingMaximized(true)}
+                  >
+                    <Text style={styles.maximizeBtnText}>⤢ Fullscreen</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView style={styles.readOnlyScroll} nestedScrollEnabled>
+                  <MarkdownText text={editableContent} />
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Practice Mode buttons moved below summary box */}
             {session.templateId === "flashcards" && (
               <TouchableOpacity
-                style={styles.playCardsBtn}
+                style={[styles.playCardsBtn, { marginVertical: Spacing.sm }]}
                 onPress={() => {
                   setCardPlayerVisible(true);
                   setCurrentCardIndex(0);
@@ -907,7 +936,7 @@ export default function ResultsScreen() {
 
             {session.templateId === "exam-prep" && (
               <TouchableOpacity
-                style={[styles.playCardsBtn, { backgroundColor: Colors.accent2 }]}
+                style={[styles.playCardsBtn, { backgroundColor: Colors.accent2, marginVertical: Spacing.sm }]}
                 onPress={() => {
                   setQuizPlayerVisible(true);
                   setCurrentQuestionIndex(0);
@@ -920,23 +949,6 @@ export default function ResultsScreen() {
               >
                 <Text style={styles.playCardsBtnText}>✍️ Start Interactive Practice Quiz</Text>
               </TouchableOpacity>
-            )}
-
-            {/* Content Box */}
-            {isEditing ? (
-              <TextInput
-                style={[styles.textarea, styles.contentArea]}
-                value={editableContent}
-                onChangeText={setEditableContent}
-                multiline
-                textAlignVertical="top"
-              />
-            ) : (
-              <View style={styles.contentCard}>
-                <ScrollView style={styles.readOnlyScroll} nestedScrollEnabled>
-                  <MarkdownText text={editableContent} />
-                </ScrollView>
-              </View>
             )}
 
             {/* Export Buttons */}
@@ -1303,14 +1315,14 @@ export default function ResultsScreen() {
       {session.templateId === "flashcards" && (
         <Modal
           visible={cardPlayerVisible}
-          animationType="fade"
+          animationType="slide"
           transparent={true}
           onRequestClose={() => setCardPlayerVisible(false)}
         >
           <View style={styles.cardOverlay}>
             <View style={styles.cardPlayerContainer}>
               <View style={styles.cardPlayerHeader}>
-                <Text style={styles.cardPlayerTitle}>🃏 Flashcard Mode</Text>
+                <Text style={styles.cardPlayerTitle}>🧠 Flashcards Practice</Text>
                 <TouchableOpacity onPress={() => setCardPlayerVisible(false)}>
                   <Text style={styles.cardPlayerClose}>✕</Text>
                 </TouchableOpacity>
@@ -2315,5 +2327,70 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontWeight: FontWeight.bold,
     fontSize: FontSize.sm,
+  },
+
+  // Fullscreen Reading styles
+  contentCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    paddingBottom: 8,
+    marginBottom: Spacing.sm,
+    width: "100%",
+  },
+  contentCardTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.textSecondary,
+  },
+  maximizeBtn: {
+    backgroundColor: "rgba(168,85,247,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(168,85,247,0.25)",
+    borderRadius: Radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  maximizeBtnText: {
+    fontSize: 10,
+    color: Colors.accent3,
+    fontWeight: FontWeight.bold,
+  },
+  fullscreenHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.bgSecondary,
+  },
+  fullscreenTitle: {
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  fullscreenCloseBtn: {
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  fullscreenCloseText: {
+    fontSize: FontSize.xs,
+    color: Colors.textPrimary,
+    fontWeight: FontWeight.bold,
+  },
+  fullscreenScroll: {
+    flex: 1,
+    backgroundColor: Colors.bgPrimary,
+  },
+  fullscreenScrollContent: {
+    padding: Spacing.lg,
+    paddingBottom: Spacing["3xl"],
   },
 });
