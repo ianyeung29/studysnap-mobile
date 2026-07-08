@@ -44,6 +44,10 @@ export default function ResultsScreen() {
   const [userAnswer, setUserAnswer] = useState<string>("");
   const [checkingAnswer, setCheckingAnswer] = useState<boolean>(false);
 
+  // Editable Session metadata
+  const [editableTitle, setEditableTitle] = useState("");
+  const [editableCourse, setEditableCourse] = useState("");
+
   // Flashcard Player & Mastery States
   const [cardPlayerVisible, setCardPlayerVisible] = useState(false);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
@@ -113,6 +117,8 @@ export default function ResultsScreen() {
 
       setSession(updatedSession);
       setEditableContent(content);
+      setEditableTitle(updatedSession.title);
+      setEditableCourse(updatedSession.course || "General");
       Alert.alert("Success", "Study materials compiled successfully!");
     } catch (err: unknown) {
       console.error("[Retry Generation Error]:", err);
@@ -182,6 +188,8 @@ export default function ResultsScreen() {
         if (found) {
           setSession(found);
           setEditableContent(found.content);
+          setEditableTitle(found.title);
+          setEditableCourse(found.course || "General");
         }
       });
     }
@@ -396,6 +404,8 @@ export default function ResultsScreen() {
 
         setSession(updatedSession);
         setEditableContent(cachedContent);
+        setEditableTitle(updatedSession.title);
+        setEditableCourse(updatedSession.course || "General");
         return;
       }
 
@@ -427,6 +437,8 @@ export default function ResultsScreen() {
 
         setSession(updatedSession);
         setEditableContent(content);
+        setEditableTitle(updatedSession.title);
+        setEditableCourse(updatedSession.course || "General");
         Alert.alert("Success", `Converted to ${TEMPLATES[newTemplateId].label}!`);
       } catch (e) {
         Alert.alert("Regeneration failed", "Could not convert to the new format.");
@@ -442,6 +454,8 @@ export default function ResultsScreen() {
     try {
       const updatedSession = {
         ...session,
+        title: editableTitle.trim() || session.title,
+        course: editableCourse.trim() || "General",
         content: editableContent,
         contents: {
           ...(session.contents || { [session.templateId]: session.content }),
@@ -696,7 +710,17 @@ export default function ResultsScreen() {
             <Text style={styles.templateIcon}>{currentTemplate?.icon ?? "📚"}</Text>
             <View style={styles.titleInfo}>
               <Text style={styles.templateLabel}>{currentTemplate?.label}</Text>
-              <Text style={styles.title}>{session.title}</Text>
+              {isEditing ? (
+                <TextInput
+                  style={styles.headerInput}
+                  value={editableTitle}
+                  onChangeText={setEditableTitle}
+                  placeholder="Session title..."
+                  placeholderTextColor={Colors.textMuted}
+                />
+              ) : (
+                <Text style={styles.title}>{session.title}</Text>
+              )}
             </View>
             <TouchableOpacity style={styles.ttsBtn} onPress={handleToggleSpeech}>
               <Text style={styles.ttsBtnIcon}>{isSpeaking ? "⏹️" : "🔊"}</Text>
@@ -708,9 +732,23 @@ export default function ResultsScreen() {
               <Text style={styles.favoriteBtnIcon}>{session.isFavorite ? "⭐" : "☆"}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.meta}>
-            {formatDate(session.date)} · {formatDuration(session.durationSeconds)} · {session.photoCount} photo{session.photoCount !== 1 ? "s" : ""}
-          </Text>
+          
+          {isEditing ? (
+            <View style={styles.headerCourseRow}>
+              <Text style={styles.headerCourseLabel}>Folder / Course:</Text>
+              <TextInput
+                style={styles.headerCourseInput}
+                value={editableCourse}
+                onChangeText={setEditableCourse}
+                placeholder="e.g. Biology 101"
+                placeholderTextColor={Colors.textMuted}
+              />
+            </View>
+          ) : (
+            <Text style={styles.meta}>
+              Folder: <Text style={{ color: Colors.accent3, fontWeight: "bold" }}>{session.course || "General"}</Text> · {formatDate(session.date)} · {formatDuration(session.durationSeconds)} · {session.photoCount} photo{session.photoCount !== 1 ? "s" : ""}
+            </Text>
+          )}
         </View>
 
         {session.isFailed ? (
@@ -1848,5 +1886,44 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: FontWeight.bold,
     fontSize: FontSize.sm,
+  },
+
+  // Metadata Edit inputs
+  headerInput: {
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    color: Colors.textPrimary,
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+    width: "100%",
+    marginTop: 4,
+  },
+  headerCourseRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+    width: "100%",
+  },
+  headerCourseLabel: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontWeight: FontWeight.semibold,
+  },
+  headerCourseInput: {
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    color: Colors.accent3,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    flex: 1,
   },
 });
