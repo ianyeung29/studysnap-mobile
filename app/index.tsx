@@ -36,10 +36,10 @@ export default function HomeScreen() {
       return;
     }
 
-    const email = "support@studysnap.app";
+    const email = "asmrforall1999@gmail.com";
     const subject = encodeURIComponent(`[StudySnap Mobile] ${feedbackType}`);
     const body = encodeURIComponent(
-      `Hey StudySnap Support Team,\n\nHere is my ${feedbackType.toLowerCase()}:\n\n${feedbackText}\n\nDevice OS: ${Platform.OS}\nDate: ${new Date().toLocaleDateString()}`
+      `Hey Admin,\n\nHere is my ${feedbackType.toLowerCase()}:\n\n${feedbackText}\n\nDevice OS: ${Platform.OS}\nDate: ${new Date().toLocaleDateString()}`
     );
 
     const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`;
