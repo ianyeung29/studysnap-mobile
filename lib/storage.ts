@@ -12,7 +12,8 @@ export interface Session {
   photoCount: number;
   templateId: string;
   content: string;
-  course?: string; // e.g. "CHEM 101"
+  course?: string; // e.g. "CHEM 101" (sub-folder name)
+  parentFolder?: string; // e.g. "Spring 2026" (parent folder name)
   isFavorite?: boolean;
   contents?: Record<string, string>; // Maps templateId -> generated content
   audioUri?: string;
@@ -20,6 +21,7 @@ export interface Session {
   rawTranscript?: string;
   photoUris?: string[];
   photoTexts?: string[];
+  isMasterGuide?: boolean;
 }
 
 export async function saveSessions(sessions: Session[]): Promise<void> {

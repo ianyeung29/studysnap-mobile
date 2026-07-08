@@ -14,9 +14,11 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
-import { loadSessions, saveSessions, Session, formatDate } from "@/lib/storage";
+import { loadSessions, saveSessions, addSession, Session, formatDate } from "@/lib/storage";
 import { TEMPLATES } from "@/lib/templates";
+import { summarize } from "../lib/api";
 import BottomNav from "@/components/BottomNav";
 
 export default function LibraryScreen() {
@@ -46,6 +48,108 @@ export default function LibraryScreen() {
   const [newSubParent, setNewSubParent] = useState("");
 
   const [newParentInput, setNewParentInput] = useState("");
+
+  // Context menus for folders
+  const [parentMenuVisible, setParentMenuVisible] = useState(false);
+  const [selectedParentMenuName, setSelectedParentMenuName] = useState<string | null>(null);
+  const [selectedParentMenuIdx, setSelectedParentMenuIdx] = useState<number>(-1);
+
+  const [courseMenuVisible, setCourseMenuVisible] = useState(false);
+  const [selectedCourseMenuName, setSelectedCourseMenuName] = useState<string | null>(null);
+  const [selectedCourseParentName, setSelectedCourseParentName] = useState<string | null>(null);
+  const [selectedCourseMenuIdx, setSelectedCourseMenuIdx] = useState<number>(-1);
+  const [totalCoursesInParent, setTotalCoursesInParent] = useState<number>(0);
+
+  // Master Compiler Loading state
+  const [compilingSub, setCompilingSub] = useState<{ parent: string; name: string } | null>(null);
+
+  const handleCompileMasterExam = async (parentFolderName: string, courseName: string) => {
+    // Find all sessions in this sub-folder (excluding other master guides)
+    const courseSessions = sessions.filter(
+      (s) =>
+        (s.course?.trim() || "General") === courseName &&
+        (s.parentFolder?.trim() || "General Folders") === parentFolderName &&
+        !s.isMasterGuide &&
+        !s.isFailed
+    );
+
+    if (courseSessions.length === 0) {
+      Alert.alert(
+        "Empty Folder",
+        "Please add at least one processed study session to this course folder before compiling a master guide."
+      );
+      return;
+    }
+
+    setCompilingSub({ parent: parentFolderName, name: courseName });
+
+    try {
+      const combinedTexts = courseSessions
+        .map((s) => `### LECTURE: ${s.title}\n\n${s.content}`)
+        .join("\n\n---\n\n");
+
+      const promptInput = `You are a Master Course Coordinator. Synthesize all the attached lecture summaries from the course "${courseName}" into a unified, high-yield master study notes and practice exam.
+    
+Link concepts together, identify connections across lectures, and clarify potential difficulties.
+
+OUTPUT FORMAT:
+1. # 🎓 MASTER PRACTICE EXAM
+Provide a comprehensive set of practice questions (at least 6-8 questions, multiple-choice or open-ended) covering all lectures. Label them as Question 1, Question 2, etc. (Provide correct answers and explanations at the very bottom of the document).
+
+2. # 📚 MOST IMPORTANT POINTS
+Consolidate a bulleted high-yield summary of core points across all lectures.
+
+3. # 🎯 CRITICAL CONCEPTUAL CONNECTIONS
+Synthesize major linkages, transitions, and connections between these lectures to help students grasp the course as a whole.
+
+Here are the lecture contents to compile:
+${combinedTexts}`;
+
+      const result = await summarize(promptInput, "exam-prep");
+
+      const masterSession: Session = {
+        id: `master-${courseName.toLowerCase().replace(/[^a-z0-9]/g, "")}-${Date.now()}`,
+        title: `🎓 ${courseName} - Master Exam & Guide`,
+        date: new Date().toISOString(),
+        durationSeconds: courseSessions.reduce((sum, s) => sum + (s.durationSeconds || 0), 0),
+        photoCount: courseSessions.reduce((sum, s) => sum + (s.photoCount || 0), 0),
+        course: courseName,
+        parentFolder: parentFolderName,
+        templateId: "exam-prep",
+        content: result.content,
+        isMasterGuide: true,
+        rawTranscript: `Compiled from: ${courseSessions.map((s) => s.title).join(", ")}`,
+        contents: {
+          "exam-prep": result.content,
+        },
+      };
+
+      await addSession(masterSession);
+      const updated = await loadSessions();
+      setSessions(updated);
+      setCompilingSub(null);
+
+      Alert.alert(
+        "Master Exam Compiled! 🎓",
+        `We compiled a master guide from ${courseSessions.length} lectures. Open it inside the folder to practice!`,
+        [
+          {
+            text: "Open Now",
+            onPress: () =>
+              router.push({
+                pathname: "/results",
+                params: { sessionId: masterSession.id },
+              }),
+          },
+          { text: "Later" },
+        ]
+      );
+    } catch (e) {
+      console.error("Master Compilation Failed:", e);
+      setCompilingSub(null);
+      Alert.alert("Compilation Failed", "Could not connect to the AI engine to compile the master guide.");
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -338,15 +442,15 @@ export default function LibraryScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTitleRow}>
-            <Text style={styles.title}>📁 Course Library</Text>
+            <Text style={styles.title}>Library</Text>
             <TouchableOpacity
               style={styles.addParentBtn}
               onPress={() => setCreateParentModalVisible(true)}
             >
-              <Text style={styles.addParentBtnText}>➕ Folder</Text>
+              <Text style={styles.addParentBtnText}>+ Folder</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.subtitle}>Organize folders (sub-folders) under Parent Folders (e.g. semesters)</Text>
+          <Text style={styles.subtitle}>Organize courses under semester parent folders</Text>
         </View>
 
         <ScrollView
@@ -369,14 +473,20 @@ export default function LibraryScreen() {
               const isParentExpanded = expandedParents[parent.name] ?? true; // default expanded
               return (
                 <View key={parent.name} style={styles.parentContainer}>
-                  {/* Top-Level Parent Folder Header */}
+                  {/* Top-Level Parent Folder Header (Redesigned with chevrons and single More button) */}
                   <View style={styles.parentHeader}>
                     <TouchableOpacity
                       style={styles.parentTitleSection}
                       activeOpacity={0.8}
                       onPress={() => toggleParent(parent.name)}
                     >
-                      <Text style={styles.parentIcon}>📂</Text>
+                      <Feather
+                        name={isParentExpanded ? "chevron-down" : "chevron-right"}
+                        size={16}
+                        color={Colors.textSecondary}
+                        style={{ marginRight: Spacing.xs }}
+                      />
+                      <Feather name="folder" size={18} color={Colors.accent3} style={{ marginRight: Spacing.sm }} />
                       <View>
                         <Text style={styles.parentName}>{parent.name}</Text>
                         <Text style={styles.parentCount}>
@@ -385,41 +495,17 @@ export default function LibraryScreen() {
                       </View>
                     </TouchableOpacity>
 
-                    <View style={styles.actionRow}>
-                      {/* Arrow Ordering Buttons */}
-                      <TouchableOpacity
-                        style={styles.arrowBtn}
-                        disabled={parentIdx === 0}
-                        onPress={() => moveParent(parent.name, "up")}
-                      >
-                        <Text style={[styles.arrowText, parentIdx === 0 && styles.disabledText]}>▲</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.arrowBtn}
-                        disabled={parentIdx === nestedFolders.length - 1}
-                        onPress={() => moveParent(parent.name, "down")}
-                      >
-                        <Text style={[styles.arrowText, parentIdx === nestedFolders.length - 1 && styles.disabledText]}>▼</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.renameBtn}
-                        onPress={() => {
-                          setParentToEdit(parent.name);
-                          setNewParentName(parent.name);
-                          setEditParentModalVisible(true);
-                        }}
-                      >
-                        <Text style={styles.renameBtnText}>✏️</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.renameBtn, { backgroundColor: "rgba(239,68,68,0.12)", borderColor: "rgba(239,68,68,0.2)" }]}
-                        onPress={() => handleDeleteParent(parent.name)}
-                      >
-                        <Text style={[styles.renameBtnText, { color: Colors.error }]}>🗑️</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity
+                      style={styles.moreBtn}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setSelectedParentMenuName(parent.name);
+                        setSelectedParentMenuIdx(parentIdx);
+                        setParentMenuVisible(true);
+                      }}
+                    >
+                      <Feather name="more-vertical" size={18} color={Colors.textMuted} />
+                    </TouchableOpacity>
                   </View>
 
                   {/* Sub-Folders (nested inside Parent Folder) */}
@@ -439,7 +525,13 @@ export default function LibraryScreen() {
                                   activeOpacity={0.8}
                                   onPress={() => toggleSub(parent.name, sub.name)}
                                 >
-                                  <Text style={styles.subIcon}>📁</Text>
+                                  <Feather
+                                    name={isSubExpanded ? "chevron-down" : "chevron-right"}
+                                    size={14}
+                                    color={Colors.textMuted}
+                                    style={{ marginRight: Spacing.xs }}
+                                  />
+                                  <Feather name="book-open" size={16} color={Colors.accent2} style={{ marginRight: Spacing.sm }} />
                                   <View>
                                     <Text style={styles.subName}>{sub.name}</Text>
                                     <Text style={styles.subCount}>
@@ -448,63 +540,93 @@ export default function LibraryScreen() {
                                   </View>
                                 </TouchableOpacity>
 
-                                <View style={styles.actionRow}>
-                                  {/* Sub-folder Reordering arrows */}
-                                  <TouchableOpacity
-                                    style={styles.arrowBtn}
-                                    disabled={subIdx === 0}
-                                    onPress={() => moveSub(parent.name, sub.name, "up")}
-                                  >
-                                    <Text style={[styles.arrowText, subIdx === 0 && styles.disabledText]}>▲</Text>
-                                  </TouchableOpacity>
-                                  <TouchableOpacity
-                                    style={styles.arrowBtn}
-                                    disabled={subIdx === parent.subFolders.length - 1}
-                                    onPress={() => moveSub(parent.name, sub.name, "down")}
-                                  >
-                                    <Text style={[styles.arrowText, subIdx === parent.subFolders.length - 1 && styles.disabledText]}>▼</Text>
-                                  </TouchableOpacity>
-
-                                  <TouchableOpacity
-                                    style={styles.renameBtn}
-                                    onPress={() => {
-                                      setSubToEdit({ parent: parent.name, name: sub.name });
-                                      setNewSubName(sub.name);
-                                      setNewSubParent(parent.name);
-                                      setEditSubModalVisible(true);
-                                    }}
-                                  >
-                                    <Text style={styles.renameBtnText}>✏️</Text>
-                                  </TouchableOpacity>
-                                </View>
+                                <TouchableOpacity
+                                  style={styles.moreBtn}
+                                  activeOpacity={0.7}
+                                  onPress={() => {
+                                    setSelectedCourseMenuName(sub.name);
+                                    setSelectedCourseParentName(parent.name);
+                                    setSelectedCourseMenuIdx(subIdx);
+                                    setTotalCoursesInParent(parent.subFolders.length);
+                                    setCourseMenuVisible(true);
+                                  }}
+                                >
+                                  <Feather name="more-vertical" size={16} color={Colors.textMuted} />
+                                </TouchableOpacity>
                               </View>
 
                               {/* Sessions inside Sub-folder */}
                               {isSubExpanded && (
                                 <View style={styles.sessionsSublist}>
-                                  {sub.sessions.map((session) => (
-                                    <TouchableOpacity
-                                      key={session.id}
-                                      style={styles.sessionItemRow}
-                                      onPress={() =>
-                                        router.push({
-                                          pathname: "/results",
-                                          params: { sessionId: session.id },
-                                        })
-                                      }
-                                    >
-                                      <Text style={styles.sessionItemIcon}>
-                                        {TEMPLATES[session.templateId as keyof typeof TEMPLATES]?.icon ?? "📚"}
-                                      </Text>
-                                      <View style={styles.sessionItemInfo}>
-                                        <Text style={styles.sessionItemTitle} numberOfLines={1}>
-                                          {session.title}
-                                        </Text>
-                                        <Text style={styles.sessionItemDate}>{formatDate(session.date)}</Text>
-                                      </View>
-                                      <Text style={styles.sessionArrow}>›</Text>
-                                    </TouchableOpacity>
-                                  ))}
+                                  {/* Compile Master Exam button */}
+                                  {sub.sessions.filter((s) => !s.isMasterGuide).length > 0 && (
+                                    <View style={{ marginBottom: Spacing.sm }}>
+                                      {compilingSub?.parent === parent.name && compilingSub?.name === sub.name ? (
+                                        <View style={styles.compileLoadingRow}>
+                                          <ActivityIndicator size="small" color={Colors.accent3} />
+                                          <Text style={styles.compileLoadingText}>Compiling Master Exam...</Text>
+                                        </View>
+                                      ) : (
+                                        <TouchableOpacity
+                                          style={styles.compileBtn}
+                                          activeOpacity={0.8}
+                                          onPress={() => handleCompileMasterExam(parent.name, sub.name)}
+                                        >
+                                          <Feather name="award" size={14} color={Colors.white} style={{ marginRight: 6 }} />
+                                          <Text style={styles.compileBtnText}>Compile Master Exam & Guide</Text>
+                                        </TouchableOpacity>
+                                      )}
+                                    </View>
+                                  )}
+
+                                  {sub.sessions.length === 0 ? (
+                                    <Text style={styles.emptySessionsText}>No study sessions in this course.</Text>
+                                  ) : (
+                                    sub.sessions.map((session) => (
+                                      <TouchableOpacity
+                                        key={session.id}
+                                        style={[
+                                          styles.sessionItemRow,
+                                          session.isMasterGuide && {
+                                            borderColor: "rgba(124,58,237,0.3)",
+                                            backgroundColor: "rgba(124,58,237,0.05)",
+                                          },
+                                        ]}
+                                        onPress={() =>
+                                          router.push({
+                                            pathname: "/results",
+                                            params: { sessionId: session.id },
+                                          })
+                                        }
+                                      >
+                                        <View style={{ marginRight: Spacing.xs }}>
+                                          {session.isMasterGuide ? (
+                                            <Feather name="award" size={16} color={Colors.accent3} />
+                                          ) : (
+                                            <Feather name="file-text" size={16} color={Colors.textSecondary} />
+                                          )}
+                                        </View>
+                                        <View style={styles.sessionItemInfo}>
+                                          <Text
+                                            style={[
+                                              styles.sessionItemTitle,
+                                              session.isMasterGuide && {
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.accent3,
+                                              },
+                                            ]}
+                                            numberOfLines={1}
+                                          >
+                                            {session.title}
+                                          </Text>
+                                          <Text style={styles.sessionItemDate}>
+                                            {session.isMasterGuide ? "Master Guide" : formatDate(session.date)}
+                                          </Text>
+                                        </View>
+                                        <Text style={styles.sessionArrow}>›</Text>
+                                      </TouchableOpacity>
+                                    ))
+                                  )}
                                 </View>
                               )}
                             </View>
@@ -636,6 +758,186 @@ export default function LibraryScreen() {
                 <Text style={styles.modalBtnText}>Create</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Context Action Menu for Parent Semester Folders */}
+      <Modal
+        visible={parentMenuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setParentMenuVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>📁 Semester: {selectedParentMenuName}</Text>
+              <TouchableOpacity onPress={() => setParentMenuVisible(false)}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: Spacing.xs }}>
+              <TouchableOpacity
+                style={styles.moreMenuOption}
+                onPress={() => {
+                  setParentMenuVisible(false);
+                  setParentToEdit(selectedParentMenuName);
+                  setNewParentName(selectedParentMenuName || "");
+                  setEditParentModalVisible(true);
+                }}
+              >
+                <Feather name="edit-2" size={16} color={Colors.textPrimary} style={{ marginRight: Spacing.md }} />
+                <Text style={styles.moreMenuOptionText}>Rename Semester Folder</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.moreMenuOption, selectedParentMenuIdx === 0 && { opacity: 0.4 }]}
+                disabled={selectedParentMenuIdx === 0}
+                onPress={() => {
+                  setParentMenuVisible(false);
+                  if (selectedParentMenuName) moveParent(selectedParentMenuName, "up");
+                }}
+              >
+                <Feather name="arrow-up" size={16} color={Colors.textPrimary} style={{ marginRight: Spacing.md }} />
+                <Text style={styles.moreMenuOptionText}>Move Semester Up</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.moreMenuOption, selectedParentMenuIdx === parentOrder.length - 1 && { opacity: 0.4 }]}
+                disabled={selectedParentMenuIdx === parentOrder.length - 1}
+                onPress={() => {
+                  setParentMenuVisible(false);
+                  if (selectedParentMenuName) moveParent(selectedParentMenuName, "down");
+                }}
+              >
+                <Feather name="arrow-down" size={16} color={Colors.textPrimary} style={{ marginRight: Spacing.md }} />
+                <Text style={styles.moreMenuOptionText}>Move Semester Down</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.moreMenuOption, { borderBottomWidth: 0 }]}
+                onPress={() => {
+                  setParentMenuVisible(false);
+                  if (selectedParentMenuName) handleDeleteParent(selectedParentMenuName);
+                }}
+              >
+                <Feather name="trash-2" size={16} color={Colors.error} style={{ marginRight: Spacing.md }} />
+                <Text style={[styles.moreMenuOptionText, { color: Colors.error }]}>Delete Semester Folder</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.modalBtnCancel, { marginTop: Spacing.xs }]}
+              onPress={() => setParentMenuVisible(false)}
+            >
+              <Text style={styles.modalBtnCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Context Action Menu for Course Sub-folders */}
+      <Modal
+        visible={courseMenuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setCourseMenuVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>📚 Course: {selectedCourseMenuName}</Text>
+              <TouchableOpacity onPress={() => setCourseMenuVisible(false)}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: Spacing.xs }}>
+              <TouchableOpacity
+                style={styles.moreMenuOption}
+                onPress={() => {
+                  setCourseMenuVisible(false);
+                  setSubToEdit({ parent: selectedCourseParentName || "", name: selectedCourseMenuName || "" });
+                  setNewSubName(selectedCourseMenuName || "");
+                  setNewSubParent(selectedCourseParentName || "");
+                  setEditSubModalVisible(true);
+                }}
+              >
+                <Feather name="edit-2" size={16} color={Colors.textPrimary} style={{ marginRight: Spacing.md }} />
+                <Text style={styles.moreMenuOptionText}>Rename Course / Edit Folder</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.moreMenuOption, selectedCourseMenuIdx === 0 && { opacity: 0.4 }]}
+                disabled={selectedCourseMenuIdx === 0}
+                onPress={() => {
+                  setCourseMenuVisible(false);
+                  if (selectedCourseParentName && selectedCourseMenuName) moveSub(selectedCourseParentName, selectedCourseMenuName, "up");
+                }}
+              >
+                <Feather name="arrow-up" size={16} color={Colors.textPrimary} style={{ marginRight: Spacing.md }} />
+                <Text style={styles.moreMenuOptionText}>Move Course Up</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.moreMenuOption, selectedCourseMenuIdx === totalCoursesInParent - 1 && { opacity: 0.4 }]}
+                disabled={selectedCourseMenuIdx === totalCoursesInParent - 1}
+                onPress={() => {
+                  setCourseMenuVisible(false);
+                  if (selectedCourseParentName && selectedCourseMenuName) moveSub(selectedCourseParentName, selectedCourseMenuName, "down");
+                }}
+              >
+                <Feather name="arrow-down" size={16} color={Colors.textPrimary} style={{ marginRight: Spacing.md }} />
+                <Text style={styles.moreMenuOptionText}>Move Course Down</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.moreMenuOption, { borderBottomWidth: 0 }]}
+                onPress={async () => {
+                  setCourseMenuVisible(false);
+                  if (!selectedCourseMenuName || !selectedCourseParentName) return;
+                  Alert.alert(
+                    "Delete Course Folder",
+                    `Are you sure you want to delete the course "${selectedCourseMenuName}"? This will delete all sessions inside it.`,
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Delete Everything",
+                        style: "destructive",
+                        onPress: async () => {
+                          try {
+                            const updated = sessions.filter(
+                              (s) =>
+                                !(
+                                  (s.course?.trim() || "General") === selectedCourseMenuName &&
+                                  (s.parentFolder?.trim() || "General Folders") === selectedCourseParentName
+                                )
+                            );
+                            await saveSessions(updated);
+                            setSessions(updated);
+                            Alert.alert("Success", "Course folder and nested sessions deleted successfully.");
+                          } catch (e) {
+                            Alert.alert("Error", "Could not delete course.");
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Feather name="trash-2" size={16} color={Colors.error} style={{ marginRight: Spacing.md }} />
+                <Text style={[styles.moreMenuOptionText, { color: Colors.error }]}>Delete Course Folder</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.modalBtnCancel, { marginTop: Spacing.xs }]}
+              onPress={() => setCourseMenuVisible(false)}
+            >
+              <Text style={styles.modalBtnCancelText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -936,6 +1238,18 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.bold,
     fontSize: FontSize.sm,
   },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+    width: "100%",
+  },
+  modalCloseText: {
+    fontSize: FontSize.lg,
+    color: Colors.textMuted,
+    padding: 4,
+  },
   modalBtnText: {
     color: Colors.white,
     fontWeight: FontWeight.bold,
@@ -969,5 +1283,65 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: Colors.accent3,
+  },
+
+  // Context Actions Styles
+  moreBtn: {
+    padding: 6,
+    borderRadius: Radius.sm,
+  },
+  moreMenuOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    width: "100%",
+  },
+  moreMenuOptionText: {
+    fontSize: FontSize.sm,
+    color: Colors.textPrimary,
+    fontWeight: FontWeight.semibold,
+  },
+
+  // Master compiler layout
+  compileBtn: {
+    backgroundColor: Colors.accent3,
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+    width: "100%",
+  },
+  compileBtnText: {
+    color: Colors.white,
+    fontSize: 11,
+    fontWeight: FontWeight.bold,
+  },
+  compileLoadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: 10,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginTop: 4,
+  },
+  compileLoadingText: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontWeight: FontWeight.semibold,
+  },
+  emptySessionsText: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    textAlign: "center",
+    paddingVertical: Spacing.md,
   },
 });
