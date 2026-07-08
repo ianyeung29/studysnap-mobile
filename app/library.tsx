@@ -1,4 +1,4 @@
-// app/library.tsx — Dedicated Course Folders & Library Screen
+// app/library.tsx — Hierarchical Course Library Screen with Drag/Arrow Ordering & Nesting
 import React, { useState, useCallback } from "react";
 import {
   View,
@@ -23,76 +23,244 @@ export default function LibraryScreen() {
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
 
-  // Folder Rename Modal States
-  const [renameModalVisible, setRenameModalVisible] = useState(false);
-  const [folderToRename, setFolderToRename] = useState<string | null>(null);
-  const [newFolderName, setNewFolderName] = useState("");
+  // Accordion toggle states
+  const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({});
+  const [expandedSubs, setExpandedSubs] = useState<Record<string, boolean>>({});
+
+  // Sorting Order lists
+  const [parentOrder, setParentOrder] = useState<string[]>([]);
+  const [subOrderMap, setSubOrderMap] = useState<Record<string, string[]>>({});
+
+  // Modals for editing / creating
+  const [editParentModalVisible, setEditParentModalVisible] = useState(false);
+  const [editSubModalVisible, setEditSubModalVisible] = useState(false);
+  const [createParentModalVisible, setCreateParentModalVisible] = useState(false);
+
+  // Targets
+  const [parentToEdit, setParentToEdit] = useState<string | null>(null);
+  const [newParentName, setNewParentName] = useState("");
+
+  const [subToEdit, setSubToEdit] = useState<{ parent: string; name: string } | null>(null);
+  const [newSubName, setNewSubName] = useState("");
+  const [newSubParent, setNewSubParent] = useState("");
+
+  const [newParentInput, setNewParentInput] = useState("");
 
   useFocusEffect(
     useCallback(() => {
-      loadSessions().then((s: Session[]) => {
+      const init = async () => {
+        const s = await loadSessions();
         setSessions(s);
+
+        const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+        const pOrderRaw = await AsyncStorage.getItem("studysnap_parent_order");
+        const sOrderRaw = await AsyncStorage.getItem("studysnap_sub_order");
+        
+        if (pOrderRaw) {
+          setParentOrder(JSON.parse(pOrderRaw));
+        }
+        if (sOrderRaw) {
+          setSubOrderMap(JSON.parse(sOrderRaw));
+        }
         setLoading(false);
-      });
+      };
+      init();
     }, [])
   );
 
-  const toggleFolder = (folderName: string) => {
-    setExpandedFolders((prev) => ({
-      ...prev,
-      [folderName]: !prev[folderName],
-    }));
+  const toggleParent = (name: string) => {
+    setExpandedParents((prev) => ({ ...prev, [name]: !prev[name] }));
   };
 
-  // Group sessions by course folder
-  const getFoldersList = () => {
-    const foldersMap: Record<string, Session[]> = {};
+  const toggleSub = (parentName: string, subName: string) => {
+    const key = `${parentName}:${subName}`;
+    setExpandedSubs((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Grouping method (Parent -> SubFolder/Course -> Session list)
+  const getNestedFolders = () => {
+    const tree: Record<string, Record<string, Session[]>> = {};
+
     sessions.forEach((s) => {
-      const courseName = s.course || "General";
-      if (!foldersMap[courseName]) {
-        foldersMap[courseName] = [];
+      const parent = s.parentFolder?.trim() || "General Folders";
+      const sub = s.course?.trim() || "General";
+
+      if (!tree[parent]) {
+        tree[parent] = {};
       }
-      foldersMap[courseName].push(s);
+      if (!tree[parent][sub]) {
+        tree[parent][sub] = [];
+      }
+      tree[parent][sub].push(s);
     });
 
-    return Object.entries(foldersMap).map(([name, folderSessions]) => ({
-      name,
-      sessions: folderSessions,
-    }));
+    const parentEntries = Object.entries(tree).map(([parentName, subFolders]) => {
+      const subFolderEntries = Object.entries(subFolders).map(([subName, folderSessions]) => ({
+        name: subName,
+        sessions: folderSessions,
+      }));
+
+      // Sort sub-folders inside parent according to subOrderMap[parentName]
+      const order = subOrderMap[parentName] || [];
+      subFolderEntries.sort((a, b) => {
+        const idxA = order.indexOf(a.name);
+        const idxB = order.indexOf(b.name);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      return {
+        name: parentName,
+        subFolders: subFolderEntries,
+      };
+    });
+
+    // Sort parent folders according to parentOrder list
+    parentEntries.sort((a, b) => {
+      const idxA = parentOrder.indexOf(a.name);
+      const idxB = parentOrder.indexOf(b.name);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return parentEntries;
   };
 
-  const folders = getFoldersList();
+  const nestedFolders = getNestedFolders();
 
-  const openRenameModal = (folderName: string) => {
-    setFolderToRename(folderName);
-    setNewFolderName(folderName);
-    setRenameModalVisible(true);
+  // Custom ordering operations
+  const moveParent = async (parentName: string, direction: "up" | "down") => {
+    const list = [...parentOrder];
+    const activeParents = Array.from(new Set(sessions.map((s) => s.parentFolder?.trim() || "General Folders")));
+    activeParents.forEach((p) => {
+      if (!list.includes(p)) list.push(p);
+    });
+
+    const index = list.indexOf(parentName);
+    if (index === -1) return;
+
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+
+    const temp = list[index];
+    list[index] = list[targetIndex];
+    list[targetIndex] = temp;
+
+    setParentOrder(list);
+    const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+    await AsyncStorage.setItem("studysnap_parent_order", JSON.stringify(list));
   };
 
-  const handleRenameFolder = async () => {
-    if (!folderToRename || !newFolderName.trim()) return;
+  const moveSub = async (parentName: string, subName: string, direction: "up" | "down") => {
+    const parentData = nestedFolders.find((p) => p.name === parentName);
+    if (!parentData) return;
+
+    const subNames = parentData.subFolders.map((sf) => sf.name);
+    const list = subOrderMap[parentName] ? [...subOrderMap[parentName]] : [];
+
+    subNames.forEach((name) => {
+      if (!list.includes(name)) list.push(name);
+    });
+
+    const index = list.indexOf(subName);
+    if (index === -1) return;
+
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+
+    const temp = list[index];
+    list[index] = list[targetIndex];
+    list[targetIndex] = temp;
+
+    const updatedMap = {
+      ...subOrderMap,
+      [parentName]: list,
+    };
+    setSubOrderMap(updatedMap);
+
+    const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+    await AsyncStorage.setItem("studysnap_sub_order", JSON.stringify(updatedMap));
+  };
+
+  // Editing folder actions
+  const handleRenameParent = async () => {
+    if (!parentToEdit || !newParentName.trim()) return;
 
     try {
-      const oldName = folderToRename;
-      const cleanNewName = newFolderName.trim();
+      const oldName = parentToEdit;
+      const cleanNewName = newParentName.trim();
 
-      const updatedSessions = sessions.map((s) => {
-        const currentCourse = s.course || "General";
-        if (currentCourse === oldName) {
-          return { ...s, course: cleanNewName };
+      const updated = sessions.map((s) => {
+        const currParent = s.parentFolder?.trim() || "General Folders";
+        if (currParent === oldName) {
+          return { ...s, parentFolder: cleanNewName };
         }
         return s;
       });
 
-      await saveSessions(updatedSessions);
-      setSessions(updatedSessions);
-      setRenameModalVisible(false);
-      Alert.alert("Success", `Folder successfully renamed to "${cleanNewName}"!`);
+      await saveSessions(updated);
+      setSessions(updated);
+      setEditParentModalVisible(false);
+      Alert.alert("Success", `Parent folder renamed to "${cleanNewName}" globally!`);
     } catch (e) {
-      Alert.alert("Error", "Could not rename folder.");
+      Alert.alert("Error", "Could not rename parent folder.");
     }
+  };
+
+  const handleEditSub = async () => {
+    if (!subToEdit || !newSubName.trim()) return;
+
+    try {
+      const oldSubName = subToEdit.name;
+      const oldParent = subToEdit.parent;
+      const cleanNewSubName = newSubName.trim();
+      const cleanNewParent = newSubParent.trim() || "General Folders";
+
+      const updated = sessions.map((s) => {
+        const currSub = s.course?.trim() || "General";
+        const currParent = s.parentFolder?.trim() || "General Folders";
+
+        if (currSub === oldSubName && currParent === oldParent) {
+          return { ...s, course: cleanNewSubName, parentFolder: cleanNewParent };
+        }
+        return s;
+      });
+
+      await saveSessions(updated);
+      setSessions(updated);
+      setEditSubModalVisible(false);
+      Alert.alert("Success", "Sub-folder updated successfully!");
+    } catch (e) {
+      Alert.alert("Error", "Could not edit sub-folder.");
+    }
+  };
+
+  const handleCreateParent = async () => {
+    if (!newParentInput.trim()) return;
+    const name = newParentInput.trim();
+
+    // Check if parent already exists
+    const exists = sessions.some((s) => (s.parentFolder || "General Folders") === name);
+    if (exists || parentOrder.includes(name)) {
+      Alert.alert("Info", "Parent folder already exists.");
+      setCreateParentModalVisible(false);
+      return;
+    }
+
+    const updatedOrder = [...parentOrder, name];
+    setParentOrder(updatedOrder);
+
+    const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+    await AsyncStorage.setItem("studysnap_parent_order", JSON.stringify(updatedOrder));
+    
+    setNewParentInput("");
+    setCreateParentModalVisible(false);
+    Alert.alert("Success", `Created parent folder "${name}"! Assign sub-folders to view it.`);
   };
 
   return (
@@ -100,8 +268,16 @@ export default function LibraryScreen() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>📁 Course Library</Text>
-          <Text style={styles.subtitle}>Organize and manage folder categories for your classes</Text>
+          <View style={styles.headerTitleRow}>
+            <Text style={styles.title}>📁 Course Library</Text>
+            <TouchableOpacity
+              style={styles.addParentBtn}
+              onPress={() => setCreateParentModalVisible(true)}
+            >
+              <Text style={styles.addParentBtnText}>➕ New Semester</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.subtitle}>Organize classes (sub-folders) under Semesters (parent folders)</Text>
         </View>
 
         <ScrollView
@@ -111,72 +287,154 @@ export default function LibraryScreen() {
         >
           {loading ? (
             <ActivityIndicator color={Colors.accent2} style={{ marginTop: Spacing.lg }} />
-          ) : folders.length === 0 ? (
+          ) : nestedFolders.length === 0 ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyIcon}>📂</Text>
               <Text style={styles.emptyTitle}>Your Library is Empty</Text>
               <Text style={styles.emptySub}>
-                Start a session or import audio to create folder categories.
+                Start a session or tap 'New Semester' to create folders.
               </Text>
             </View>
           ) : (
-            folders.map((folder) => {
-              const isExpanded = expandedFolders[folder.name];
+            nestedFolders.map((parent, parentIdx) => {
+              const isParentExpanded = expandedParents[parent.name] ?? true; // default expanded
               return (
-                <View key={folder.name} style={styles.folderContainer}>
-                  {/* Folder Row Header */}
-                  <TouchableOpacity
-                    style={styles.folderRow}
-                    activeOpacity={0.8}
-                    onPress={() => toggleFolder(folder.name)}
-                  >
-                    <View style={styles.folderLeft}>
-                      <Text style={styles.folderEmoji}>📁</Text>
+                <View key={parent.name} style={styles.parentContainer}>
+                  {/* Top-Level Parent Folder Header */}
+                  <View style={styles.parentHeader}>
+                    <TouchableOpacity
+                      style={styles.parentTitleSection}
+                      activeOpacity={0.8}
+                      onPress={() => toggleParent(parent.name)}
+                    >
+                      <Text style={styles.parentIcon}>📂</Text>
                       <View>
-                        <Text style={styles.folderName}>{folder.name}</Text>
-                        <Text style={styles.folderCount}>
-                          {folder.sessions.length} session{folder.sessions.length !== 1 ? "s" : ""}
+                        <Text style={styles.parentName}>{parent.name}</Text>
+                        <Text style={styles.parentCount}>
+                          {parent.subFolders.length} course folder{parent.subFolders.length !== 1 ? "s" : ""}
                         </Text>
                       </View>
-                    </View>
+                    </TouchableOpacity>
 
-                    <View style={styles.folderActions}>
+                    <View style={styles.actionRow}>
+                      {/* Arrow Ordering Buttons */}
+                      <TouchableOpacity
+                        style={styles.arrowBtn}
+                        disabled={parentIdx === 0}
+                        onPress={() => moveParent(parent.name, "up")}
+                      >
+                        <Text style={[styles.arrowText, parentIdx === 0 && styles.disabledText]}>▲</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.arrowBtn}
+                        disabled={parentIdx === nestedFolders.length - 1}
+                        onPress={() => moveParent(parent.name, "down")}
+                      >
+                        <Text style={[styles.arrowText, parentIdx === nestedFolders.length - 1 && styles.disabledText]}>▼</Text>
+                      </TouchableOpacity>
+
                       <TouchableOpacity
                         style={styles.renameBtn}
-                        onPress={() => openRenameModal(folder.name)}
+                        onPress={() => {
+                          setParentToEdit(parent.name);
+                          setNewParentName(parent.name);
+                          setEditParentModalVisible(true);
+                        }}
                       >
-                        <Text style={styles.renameBtnText}>✏️ Rename</Text>
+                        <Text style={styles.renameBtnText}>✏️</Text>
                       </TouchableOpacity>
-                      <Text style={styles.expandArrow}>{isExpanded ? "▼" : "▶"}</Text>
                     </View>
-                  </TouchableOpacity>
+                  </View>
 
-                  {/* Expanded Session Logs */}
-                  {isExpanded && (
-                    <View style={styles.sessionsSublist}>
-                      {folder.sessions.map((session) => (
-                        <TouchableOpacity
-                          key={session.id}
-                          style={styles.sessionItemRow}
-                          onPress={() =>
-                            router.push({
-                              pathname: "/results",
-                              params: { sessionId: session.id },
-                            })
-                          }
-                        >
-                          <Text style={styles.sessionItemIcon}>
-                            {TEMPLATES[session.templateId as keyof typeof TEMPLATES]?.icon ?? "📚"}
-                          </Text>
-                          <View style={styles.sessionItemInfo}>
-                            <Text style={styles.sessionItemTitle} numberOfLines={1}>
-                              {session.title}
-                            </Text>
-                            <Text style={styles.sessionItemDate}>{formatDate(session.date)}</Text>
-                          </View>
-                          <Text style={styles.sessionArrow}>›</Text>
-                        </TouchableOpacity>
-                      ))}
+                  {/* Sub-Folders (nested inside Parent Folder) */}
+                  {isParentExpanded && (
+                    <View style={styles.subFoldersList}>
+                      {parent.subFolders.length === 0 ? (
+                        <Text style={styles.emptySubtext}>No courses in this semester folder.</Text>
+                      ) : (
+                        parent.subFolders.map((sub, subIdx) => {
+                          const subKey = `${parent.name}:${sub.name}`;
+                          const isSubExpanded = expandedSubs[subKey];
+                          return (
+                            <View key={sub.name} style={styles.subContainer}>
+                              <View style={styles.subHeader}>
+                                <TouchableOpacity
+                                  style={styles.subTitleSection}
+                                  activeOpacity={0.8}
+                                  onPress={() => toggleSub(parent.name, sub.name)}
+                                >
+                                  <Text style={styles.subIcon}>📁</Text>
+                                  <View>
+                                    <Text style={styles.subName}>{sub.name}</Text>
+                                    <Text style={styles.subCount}>
+                                      {sub.sessions.length} session{sub.sessions.length !== 1 ? "s" : ""}
+                                    </Text>
+                                  </View>
+                                </TouchableOpacity>
+
+                                <View style={styles.actionRow}>
+                                  {/* Sub-folder Reordering arrows */}
+                                  <TouchableOpacity
+                                    style={styles.arrowBtn}
+                                    disabled={subIdx === 0}
+                                    onPress={() => moveSub(parent.name, sub.name, "up")}
+                                  >
+                                    <Text style={[styles.arrowText, subIdx === 0 && styles.disabledText]}>▲</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.arrowBtn}
+                                    disabled={subIdx === parent.subFolders.length - 1}
+                                    onPress={() => moveSub(parent.name, sub.name, "down")}
+                                  >
+                                    <Text style={[styles.arrowText, subIdx === parent.subFolders.length - 1 && styles.disabledText]}>▼</Text>
+                                  </TouchableOpacity>
+
+                                  <TouchableOpacity
+                                    style={styles.renameBtn}
+                                    onPress={() => {
+                                      setSubToEdit({ parent: parent.name, name: sub.name });
+                                      setNewSubName(sub.name);
+                                      setNewSubParent(parent.name);
+                                      setEditSubModalVisible(true);
+                                    }}
+                                  >
+                                    <Text style={styles.renameBtnText}>✏️</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+
+                              {/* Sessions inside Sub-folder */}
+                              {isSubExpanded && (
+                                <View style={styles.sessionsSublist}>
+                                  {sub.sessions.map((session) => (
+                                    <TouchableOpacity
+                                      key={session.id}
+                                      style={styles.sessionItemRow}
+                                      onPress={() =>
+                                        router.push({
+                                          pathname: "/results",
+                                          params: { sessionId: session.id },
+                                        })
+                                      }
+                                    >
+                                      <Text style={styles.sessionItemIcon}>
+                                        {TEMPLATES[session.templateId as keyof typeof TEMPLATES]?.icon ?? "📚"}
+                                      </Text>
+                                      <View style={styles.sessionItemInfo}>
+                                        <Text style={styles.sessionItemTitle} numberOfLines={1}>
+                                          {session.title}
+                                        </Text>
+                                        <Text style={styles.sessionItemDate}>{formatDate(session.date)}</Text>
+                                      </View>
+                                      <Text style={styles.sessionArrow}>›</Text>
+                                    </TouchableOpacity>
+                                  ))}
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })
+                      )}
                     </View>
                   )}
                 </View>
@@ -186,40 +444,102 @@ export default function LibraryScreen() {
         </ScrollView>
       </View>
 
-      {/* Folder Rename Modal Dialog */}
+      {/* Edit Parent Folder Modal */}
       <Modal
-        visible={renameModalVisible}
+        visible={editParentModalVisible}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setRenameModalVisible(false)}
+        onRequestClose={() => setEditParentModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>✏️ Rename Folder</Text>
-            <Text style={styles.modalSub}>
-              Enter a new category name for "{folderToRename}". This will update all sessions in this folder.
-            </Text>
-
+            <Text style={styles.modalTitle}>✏️ Rename Semester</Text>
             <TextInput
               style={styles.modalInput}
-              value={newFolderName}
-              onChangeText={setNewFolderName}
-              placeholder="e.g. Finance 201"
+              value={newParentName}
+              onChangeText={setNewParentName}
+              placeholder="e.g. Fall 2026"
               placeholderTextColor={Colors.textMuted}
-              maxLength={30}
               autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setEditParentModalVisible(false)}>
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBtn} onPress={handleRenameParent}>
+                <Text style={styles.modalBtnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Sub-Folder Modal (allows renaming and shifting parents) */}
+      <Modal
+        visible={editSubModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setEditSubModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>✏️ Edit Course Folder</Text>
+            
+            <Text style={styles.modalInputLabel}>Course Name:</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={newSubName}
+              onChangeText={setNewSubName}
+              placeholder="e.g. Economics 101"
+              placeholderTextColor={Colors.textMuted}
+            />
+
+            <Text style={[styles.modalInputLabel, { marginTop: Spacing.xs }]}>Move to Semester (Parent Folder):</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={newSubParent}
+              onChangeText={setNewSubParent}
+              placeholder="e.g. Spring 2026"
+              placeholderTextColor={Colors.textMuted}
             />
 
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.modalBtnCancel]}
-                onPress={() => setRenameModalVisible(false)}
-              >
+              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setEditSubModalVisible(false)}>
                 <Text style={styles.modalBtnCancelText}>Cancel</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity style={styles.modalBtn} onPress={handleRenameFolder}>
+              <TouchableOpacity style={styles.modalBtn} onPress={handleEditSub}>
                 <Text style={styles.modalBtnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Create New Parent Folder Modal */}
+      <Modal
+        visible={createParentModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setCreateParentModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>➕ Create Semester Folder</Text>
+            <Text style={styles.modalSub}>Create a parent container folder (e.g. "Spring 2026", "Summer Term") to keep your classes sorted.</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={newParentInput}
+              onChangeText={setNewParentInput}
+              placeholder="e.g. Spring 2026"
+              placeholderTextColor={Colors.textMuted}
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setCreateParentModalVisible(false)}>
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBtn} onPress={handleCreateParent}>
+                <Text style={styles.modalBtnText}>Create</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -245,15 +565,33 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: Spacing.md,
   },
+  headerTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   title: {
     fontSize: FontSize.lg,
     fontWeight: FontWeight.bold,
     color: Colors.textPrimary,
   },
   subtitle: {
-    fontSize: FontSize.xs,
+    fontSize: 11,
     color: Colors.textSecondary,
     marginTop: 4,
+  },
+  addParentBtn: {
+    backgroundColor: "rgba(124,58,237,0.15)",
+    borderWidth: 1,
+    borderColor: Colors.accent3,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+  },
+  addParentBtnText: {
+    fontSize: 11,
+    fontWeight: FontWeight.bold,
+    color: Colors.accent3,
   },
   scroll: {
     flex: 1,
@@ -285,67 +623,120 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textAlign: "center",
   },
-  folderContainer: {
+  parentContainer: {
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.border,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
     overflow: "hidden",
   },
-  folderRow: {
+  parentHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    backgroundColor: "rgba(255,255,255,0.02)",
     padding: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.04)",
   },
-  folderLeft: {
+  parentTitleSection: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
+    flex: 1,
   },
-  folderEmoji: {
+  parentIcon: {
     fontSize: 24,
   },
-  folderName: {
+  parentName: {
     fontSize: FontSize.base,
     fontWeight: FontWeight.bold,
     color: Colors.textPrimary,
   },
-  folderCount: {
-    fontSize: FontSize.xs,
+  parentCount: {
+    fontSize: 10,
     color: Colors.textMuted,
     marginTop: 2,
   },
-  folderActions: {
+  actionRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.sm,
+    gap: 4,
+  },
+  arrowBtn: {
+    width: 28,
+    height: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: Radius.sm,
+  },
+  arrowText: {
+    fontSize: 10,
+    color: Colors.textSecondary,
+  },
+  disabledText: {
+    opacity: 0.3,
   },
   renameBtn: {
+    width: 28,
+    height: 28,
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: Colors.bgInput,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: Radius.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
   },
   renameBtnText: {
-    fontSize: 10,
-    fontWeight: FontWeight.bold,
-    color: Colors.textSecondary,
+    fontSize: 12,
   },
-  expandArrow: {
-    fontSize: FontSize.sm,
+  subFoldersList: {
+    paddingLeft: Spacing.md,
+    backgroundColor: "rgba(0,0,0,0.1)",
+  },
+  emptySubtext: {
+    fontSize: FontSize.xs,
     color: Colors.textMuted,
-    width: 16,
-    textAlign: "center",
+    padding: Spacing.md,
+    fontStyle: "italic",
+  },
+  subContainer: {
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.03)",
+  },
+  subHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: Spacing.md,
+    paddingRight: Spacing.md,
+  },
+  subTitleSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    flex: 1,
+  },
+  subIcon: {
+    fontSize: 20,
+  },
+  subName: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  subCount: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
   sessionsSublist: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: "rgba(0,0,0,0.15)",
     paddingLeft: Spacing.md,
+    backgroundColor: "rgba(0,0,0,0.2)",
+    borderLeftWidth: 1,
+    borderLeftColor: Colors.accent3,
   },
   sessionItemRow: {
     flexDirection: "row",
@@ -353,22 +744,22 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     paddingRight: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.05)",
+    borderBottomColor: "rgba(255,255,255,0.04)",
   },
   sessionItemIcon: {
-    fontSize: 18,
+    fontSize: 16,
     marginRight: Spacing.sm,
   },
   sessionItemInfo: {
     flex: 1,
   },
   sessionItemTitle: {
-    fontSize: FontSize.sm,
+    fontSize: FontSize.xs,
     fontWeight: FontWeight.semibold,
     color: Colors.textPrimary,
   },
   sessionItemDate: {
-    fontSize: 10,
+    fontSize: 8,
     color: Colors.textMuted,
     marginTop: 2,
   },
@@ -380,7 +771,7 @@ const styles = StyleSheet.create({
   // Modal rename dialog styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
     justifyContent: "center",
     alignItems: "center",
     padding: Spacing.xl,
@@ -392,17 +783,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     padding: Spacing.lg,
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
   modalTitle: {
     fontSize: FontSize.base,
     fontWeight: FontWeight.bold,
     color: Colors.textPrimary,
+    marginBottom: Spacing.xs,
   },
   modalSub: {
-    fontSize: FontSize.xs,
+    fontSize: 11,
     color: Colors.textSecondary,
-    lineHeight: 18,
+    lineHeight: 16,
+    marginBottom: Spacing.xs,
+  },
+  modalInputLabel: {
+    fontSize: 10,
+    fontWeight: FontWeight.bold,
+    color: Colors.textMuted,
+    textTransform: "uppercase",
   },
   modalInput: {
     backgroundColor: Colors.bgInput,
@@ -413,12 +812,13 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: FontSize.sm,
     height: 48,
+    marginBottom: Spacing.xs,
   },
   modalButtons: {
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: Spacing.md,
-    marginTop: Spacing.xs,
+    marginTop: Spacing.md,
   },
   modalBtn: {
     backgroundColor: Colors.accent1,

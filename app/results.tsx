@@ -47,6 +47,7 @@ export default function ResultsScreen() {
   // Editable Session metadata
   const [editableTitle, setEditableTitle] = useState("");
   const [editableCourse, setEditableCourse] = useState("");
+  const [editableParentFolder, setEditableParentFolder] = useState("");
 
   // Flashcard Player & Mastery States
   const [cardPlayerVisible, setCardPlayerVisible] = useState(false);
@@ -128,6 +129,7 @@ export default function ResultsScreen() {
       setEditableContent(content);
       setEditableTitle(updatedSession.title);
       setEditableCourse(updatedSession.course || "General");
+      setEditableParentFolder(updatedSession.parentFolder || "General Folders");
       Alert.alert("Success", "Study materials compiled successfully!");
     } catch (err: unknown) {
       console.error("[Retry Generation Error]:", err);
@@ -199,6 +201,7 @@ export default function ResultsScreen() {
           setEditableContent(found.content);
           setEditableTitle(found.title);
           setEditableCourse(found.course || "General");
+          setEditableParentFolder(found.parentFolder || "General Folders");
         }
       });
     }
@@ -415,6 +418,7 @@ export default function ResultsScreen() {
         setEditableContent(cachedContent);
         setEditableTitle(updatedSession.title);
         setEditableCourse(updatedSession.course || "General");
+        setEditableParentFolder(updatedSession.parentFolder || "General Folders");
         return;
       }
 
@@ -448,6 +452,7 @@ export default function ResultsScreen() {
         setEditableContent(content);
         setEditableTitle(updatedSession.title);
         setEditableCourse(updatedSession.course || "General");
+        setEditableParentFolder(updatedSession.parentFolder || "General Folders");
         Alert.alert("Success", `Converted to ${TEMPLATES[newTemplateId].label}!`);
       } catch (e) {
         Alert.alert("Regeneration failed", "Could not convert to the new format.");
@@ -465,6 +470,7 @@ export default function ResultsScreen() {
         ...session,
         title: editableTitle.trim() || session.title,
         course: editableCourse.trim() || "General",
+        parentFolder: editableParentFolder.trim() || "General Folders",
         content: editableContent,
         contents: {
           ...(session.contents || { [session.templateId]: session.content }),
@@ -785,19 +791,32 @@ export default function ResultsScreen() {
           </View>
           
           {isEditing ? (
-            <View style={styles.headerCourseRow}>
-              <Text style={styles.headerCourseLabel}>Folder / Course:</Text>
-              <TextInput
-                style={styles.headerCourseInput}
-                value={editableCourse}
-                onChangeText={setEditableCourse}
-                placeholder="e.g. Biology 101"
-                placeholderTextColor={Colors.textMuted}
-              />
+            <View style={{ gap: Spacing.xs, width: "100%", marginTop: Spacing.sm }}>
+              <View style={styles.headerCourseRow}>
+                <Text style={styles.headerCourseLabel}>Sub-folder (Course):</Text>
+                <TextInput
+                  style={styles.headerCourseInput}
+                  value={editableCourse}
+                  onChangeText={setEditableCourse}
+                  placeholder="e.g. Biology 101"
+                  placeholderTextColor={Colors.textMuted}
+                />
+              </View>
+
+              <View style={styles.headerCourseRow}>
+                <Text style={styles.headerCourseLabel}>Parent Folder:</Text>
+                <TextInput
+                  style={styles.headerCourseInput}
+                  value={editableParentFolder}
+                  onChangeText={setEditableParentFolder}
+                  placeholder="e.g. Spring 2026"
+                  placeholderTextColor={Colors.textMuted}
+                />
+              </View>
             </View>
           ) : (
             <Text style={styles.meta}>
-              Folder: <Text style={{ color: Colors.accent3, fontWeight: "bold" }}>{session.course || "General"}</Text> · {formatDate(session.date)} · {formatDuration(session.durationSeconds)} · {session.photoCount} photo{session.photoCount !== 1 ? "s" : ""}
+              Folder: <Text style={{ color: Colors.accent3, fontWeight: "bold" }}>{session.parentFolder || "General Folders"}</Text> › <Text style={{ color: Colors.accent2, fontWeight: "bold" }}>{session.course || "General"}</Text> · {formatDate(session.date)} · {formatDuration(session.durationSeconds)} · {session.photoCount} photo{session.photoCount !== 1 ? "s" : ""}
             </Text>
           )}
         </View>
