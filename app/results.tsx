@@ -40,6 +40,11 @@ export default function ResultsScreen() {
   const [explanationResult, setExplanationResult] = useState("");
   const [explaining, setExplaining] = useState(false);
 
+  // Flashcard Player State
+  const [cardPlayerVisible, setCardPlayerVisible] = useState(false);
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+
   // Stop speech on unmount
   useEffect(() => {
     return () => {
@@ -282,6 +287,49 @@ export default function ResultsScreen() {
     }
   };
 
+  const parseFlashcards = (markdown: string): { question: string; answer: string }[] => {
+    const cards = markdown.split("---");
+    const parsed: { question: string; answer: string }[] = [];
+    for (const card of cards) {
+      const lines = card.split("\n");
+      let question = "";
+      let answer = "";
+      let isReadingQ = false;
+      let isReadingA = false;
+
+      for (const line of lines) {
+        const qIndex = line.indexOf("Q:");
+        const aIndex = line.indexOf("A:");
+
+        if (qIndex !== -1) {
+          question = line.substring(qIndex + 2).trim();
+          isReadingQ = true;
+          isReadingA = false;
+        } else if (aIndex !== -1) {
+          answer = line.substring(aIndex + 2).trim();
+          isReadingQ = false;
+          isReadingA = true;
+        } else {
+          const cleaned = line.trim();
+          if (cleaned) {
+            if (isReadingQ) {
+              question += " " + cleaned;
+            } else if (isReadingA) {
+              answer += " " + cleaned;
+            }
+          }
+        }
+      }
+
+      const cleanQ = question.replace(/[#*`_~]/g, "").trim();
+      const cleanA = answer.replace(/[#*`_~]/g, "").trim();
+      if (cleanQ && cleanA) {
+        parsed.push({ question: cleanQ, answer: cleanA });
+      }
+    }
+    return parsed;
+  };
+
   const handleExplainConcept = async () => {
     if (!conceptToExplain.trim()) {
       Alert.alert("Input Required", "Please type a concept to explain.");
@@ -372,6 +420,20 @@ export default function ResultsScreen() {
             </View>
           )}
         </View>
+
+        {/* Content Box */}
+        {session.templateId === "flashcards" && (
+          <TouchableOpacity
+            style={styles.playCardsBtn}
+            onPress={() => {
+              setCardPlayerVisible(true);
+              setCurrentCardIndex(0);
+              setIsFlipped(false);
+            }}
+          >
+            <Text style={styles.playCardsBtnText}>⚡ Start Study Practice Mode</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Content Box */}
         {isEditing ? (
@@ -503,6 +565,107 @@ export default function ResultsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Interactive Flashcard Player Modal */}
+      {session.templateId === "flashcards" && (
+        <Modal
+          visible={cardPlayerVisible}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setCardPlayerVisible(false)}
+        >
+          <View style={styles.cardOverlay}>
+            <View style={styles.cardPlayerContainer}>
+              <View style={styles.cardPlayerHeader}>
+                <Text style={styles.cardPlayerTitle}>🃏 Flashcard Mode</Text>
+                <TouchableOpacity onPress={() => setCardPlayerVisible(false)}>
+                  <Text style={styles.cardPlayerClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {(() => {
+                const flashcardDeck = parseFlashcards(editableContent);
+                if (flashcardDeck.length === 0) {
+                  return (
+                    <View style={styles.center}>
+                      <Text style={styles.explanationPlaceholder}>No flashcards parsed.</Text>
+                    </View>
+                  );
+                }
+                return (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.flashcardContainer, isFlipped && styles.flashcardContainerFlipped]}
+                      activeOpacity={0.9}
+                      onPress={() => setIsFlipped((f) => !f)}
+                    >
+                      <View style={styles.cardInner}>
+                        <Text style={styles.cardIndexLabel}>
+                          CARD {currentCardIndex + 1} OF {flashcardDeck.length}
+                        </Text>
+                        
+                        <Text style={styles.cardSideLabel}>
+                          {isFlipped ? "ANSWER" : "QUESTION"}
+                        </Text>
+                        
+                        <ScrollView style={styles.cardTextScroll} contentContainerStyle={styles.cardTextContent}>
+                          <Text style={[styles.cardText, isFlipped && styles.cardTextAnswer]}>
+                            {isFlipped
+                              ? flashcardDeck[currentCardIndex]?.answer
+                              : flashcardDeck[currentCardIndex]?.question}
+                          </Text>
+                        </ScrollView>
+
+                        <Text style={styles.cardTapPrompt}>
+                          {isFlipped ? "Tap to see question" : "Tap to reveal answer"}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    <View style={styles.cardControlsRow}>
+                      <TouchableOpacity
+                        style={[styles.cardNavBtn, currentCardIndex === 0 && styles.cardNavBtnDisabled]}
+                        disabled={currentCardIndex === 0}
+                        onPress={() => {
+                          setCurrentCardIndex((i) => i - 1);
+                          setIsFlipped(false);
+                        }}
+                      >
+                        <Text style={styles.cardNavBtnText}>‹ Previous</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.cardNavBtn,
+                          currentCardIndex === flashcardDeck.length - 1 && styles.cardNavBtnDisabled,
+                        ]}
+                        disabled={currentCardIndex === flashcardDeck.length - 1}
+                        onPress={() => {
+                          setCurrentCardIndex((i) => i + 1);
+                          setIsFlipped(false);
+                        }}
+                      >
+                        <Text style={styles.cardNavBtnText}>Next ›</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.progressBarBg}>
+                      <View
+                        style={[
+                          styles.progressBarFill,
+                          {
+                            width: `${((currentCardIndex + 1) / flashcardDeck.length) * 100}%`,
+                          },
+                        ]}
+                      />
+                    </View>
+                  </>
+                );
+              })()}
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -747,5 +910,159 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     textAlign: "center",
     marginTop: Spacing.xl,
+  },
+
+  // Play Cards Button
+  playCardsBtn: {
+    backgroundColor: Colors.accent1,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.borderAccent,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: Colors.accent1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  playCardsBtnText: {
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.base,
+  },
+
+  // Interactive Card Player Styles
+  cardOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(10,10,15,0.9)", // slightly darker overlay
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.lg,
+  },
+  cardPlayerContainer: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.lg,
+    gap: Spacing.lg,
+    alignItems: "center",
+  },
+  cardPlayerHeader: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  cardPlayerTitle: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  cardPlayerClose: {
+    fontSize: FontSize.lg,
+    color: Colors.textMuted,
+    padding: 4,
+  },
+  flashcardContainer: {
+    width: "100%",
+    aspectRatio: 1.4, // standard index card ratio
+    backgroundColor: Colors.bgInput,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.lg,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 8,
+  },
+  flashcardContainerFlipped: {
+    borderColor: Colors.accent3,
+    backgroundColor: "rgba(124,58,237,0.06)",
+  },
+  cardInner: {
+    flex: 1,
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  cardIndexLabel: {
+    fontSize: 10,
+    fontWeight: FontWeight.bold,
+    color: Colors.textMuted,
+    letterSpacing: 1,
+  },
+  cardSideLabel: {
+    fontSize: 11,
+    fontWeight: FontWeight.bold,
+    color: Colors.accent1,
+    letterSpacing: 1,
+    marginTop: 4,
+  },
+  cardTextScroll: {
+    flex: 1,
+    width: "100%",
+    marginVertical: Spacing.sm,
+  },
+  cardTextContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cardText: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.semibold,
+    textAlign: "center",
+    lineHeight: 24,
+  },
+  cardTextAnswer: {
+    color: Colors.accent3,
+  },
+  cardTapPrompt: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    fontStyle: "italic",
+  },
+  cardControlsRow: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: Spacing.md,
+  },
+  cardNavBtn: {
+    flex: 1,
+    height: 48,
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cardNavBtnDisabled: {
+    opacity: 0.3,
+  },
+  cardNavBtnText: {
+    color: Colors.textPrimary,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.sm,
+  },
+  progressBarBg: {
+    width: "100%",
+    height: 6,
+    backgroundColor: Colors.bgInput,
+    borderRadius: Radius.full,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: Colors.accent3,
+    borderRadius: Radius.full,
   },
 });
