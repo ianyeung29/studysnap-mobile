@@ -135,11 +135,33 @@ export default function ResultsScreen() {
   const handleRegenerate = useCallback(
     async (newTemplateId: TemplateId) => {
       if (!session || regenerating) return;
+
+      // Check if this format was already generated before and cached
+      const cachedContent = session.contents?.[newTemplateId];
+      if (cachedContent) {
+        const updatedSession = {
+          ...session,
+          templateId: newTemplateId,
+          content: cachedContent,
+        };
+
+        const sessions = await loadSessions();
+        const updatedSessions = sessions.map((s: Session) => (s.id === session.id ? updatedSession : s));
+        const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+        await AsyncStorage.setItem("studysnap_sessions", JSON.stringify(updatedSessions));
+
+        setSession(updatedSession);
+        setEditableContent(cachedContent);
+        return;
+      }
+
       setRegenerating(true);
 
       try {
+        // Use the original study-guide or the current content as reference for translation
+        const referenceContent = session.contents?.["study-guide"] || editableContent;
         const { title, content } = await summarize(
-          `Convert this current study material into the requested format: ${newTemplateId}\n\n${editableContent}`,
+          `Convert this current study material into the requested format: ${newTemplateId}\n\n${referenceContent}`,
           newTemplateId
         );
 
@@ -148,9 +170,12 @@ export default function ResultsScreen() {
           title,
           content,
           templateId: newTemplateId,
+          contents: {
+            ...(session.contents || { [session.templateId]: editableContent }),
+            [newTemplateId]: content,
+          },
         };
 
-        // Update locally
         const sessions = await loadSessions();
         const updatedSessions = sessions.map((s: Session) => (s.id === session.id ? updatedSession : s));
         const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
@@ -171,12 +196,22 @@ export default function ResultsScreen() {
   const handleSave = async () => {
     if (!session) return;
     try {
+      const updatedSession = {
+        ...session,
+        content: editableContent,
+        contents: {
+          ...(session.contents || { [session.templateId]: session.content }),
+          [session.templateId]: editableContent,
+        },
+      };
+
       const sessions = await loadSessions();
       const updatedSessions = sessions.map((s: Session) =>
-        s.id === session.id ? { ...s, content: editableContent } : s
+        s.id === session.id ? updatedSession : s
       );
       const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
       await AsyncStorage.setItem("studysnap_sessions", JSON.stringify(updatedSessions));
+      setSession(updatedSession);
       setIsEditing(false);
       Alert.alert("Saved", "Changes saved successfully.");
     } catch {

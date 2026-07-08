@@ -14,6 +14,7 @@ export interface Session {
   content: string;
   course?: string; // e.g. "CHEM 101"
   isFavorite?: boolean;
+  contents?: Record<string, string>; // Maps templateId -> generated content
 }
 
 export async function saveSessions(sessions: Session[]): Promise<void> {

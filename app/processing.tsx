@@ -124,6 +124,9 @@ export default function ProcessingScreen() {
         templateId,
         content,
         course: params.course || autoCourse || "General",
+        contents: {
+          [templateId]: content,
+        },
       };
       await addSession(session);
       updateStep("save", "done", "Session saved ✓");

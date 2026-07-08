@@ -49,6 +49,8 @@ export default function SessionScreen() {
   // Processing
   const [isGenerating, setIsGenerating] = useState(false);
   const [course, setCourse] = useState("");
+  const [step, setStep] = useState<"recording" | "photos">("recording");
+  const [recordedAudioUri, setRecordedAudioUri] = useState<string | null>(null);
 
   // ── Start recording on mount ────────────────────────────────
   useEffect(() => {
@@ -101,7 +103,7 @@ export default function SessionScreen() {
         }
         // Stop at 2 hours (7200s)
         if (s >= 7200) {
-          handleStopAndGenerate();
+          handleStopRecording();
           return s;
         }
         return s + 1;
@@ -203,26 +205,42 @@ export default function SessionScreen() {
     setPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleStopAndGenerate = useCallback(async () => {
-    if (isGenerating) return;
-    setIsGenerating(true);
+  const handleStopRecording = async () => {
     stopTimer();
     setStatus("stopped");
     isRecordingStoppedRef.current = true;
+    try {
+      await recorder.stop();
+      setRecordedAudioUri(recorder.uri ?? null);
+      setStep("photos"); // Transition to Step 2
+    } catch (e) {
+      Alert.alert("Error", "Could not stop recording.");
+    }
+  };
+
+  const confirmStop = () => {
+    Alert.alert(
+      "Stop Recording?",
+      "This will stop recording and proceed to adding whiteboard photos/slides.",
+      [
+        { text: "Keep Recording", style: "cancel" },
+        { text: "Stop & Continue", style: "default", onPress: handleStopRecording },
+      ]
+    );
+  };
+
+  const handleFinalGenerate = useCallback(async () => {
+    if (isGenerating) return;
+    setIsGenerating(true);
 
     try {
-      // Stop recording
-      await recorder.stop();
-      const audioUri = recorder.uri ?? null;
-
       // Wait for any still-processing photos
       const currentPhotos = photos;
 
-      // Navigate to processing screen, passing params
       router.replace({
         pathname: "/processing",
         params: {
-          audioUri: audioUri ?? "",
+          audioUri: recordedAudioUri ?? "",
           photoUris: JSON.stringify(currentPhotos.map((p) => p.uri)),
           photoTexts: JSON.stringify(
             currentPhotos.map((p) => p.extractedText ?? "")
@@ -236,18 +254,7 @@ export default function SessionScreen() {
       Alert.alert("Error", "Something went wrong. Please try again.");
       setIsGenerating(false);
     }
-  }, [isGenerating, photos, seconds, templateId, router, recorder, course]);
-
-  const confirmStop = () => {
-    Alert.alert(
-      "Stop Recording?",
-      "This will stop recording and generate your study materials.",
-      [
-        { text: "Keep Recording", style: "cancel" },
-        { text: "Stop & Generate", style: "default", onPress: handleStopAndGenerate },
-      ]
-    );
-  };
+  }, [isGenerating, photos, seconds, templateId, router, recordedAudioUri, course]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["bottom"]}>
@@ -256,149 +263,173 @@ export default function SessionScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Recording Panel */}
-        <View style={styles.recordingPanel}>
-          <View style={styles.recBadge}>
-            <View style={styles.recDot} />
-            <Text style={styles.recLabel}>RECORDING</Text>
-          </View>
+        {step === "recording" ? (
+          <>
+            {/* Recording Panel */}
+            <View style={styles.recordingPanel}>
+              <View style={styles.recBadge}>
+                <View style={styles.recDot} />
+                <Text style={styles.recLabel}>RECORDING</Text>
+              </View>
 
-          <WaveformAnimation active={status === "recording"} />
+              <WaveformAnimation active={status === "recording"} />
 
-          <Text style={styles.timer}>{formatTime(seconds)}</Text>
-          <Text style={styles.timerSub}>Lecture in progress</Text>
-        </View>
-
-        {/* Photos Panel */}
-        <View style={styles.photosPanel}>
-          <View style={styles.photosPanelHeader}>
-            <Text style={styles.photosPanelTitle}>
-              📷 Board & Notes Photos
-            </Text>
-            <Text style={styles.photosCount}>{photos.length} photo{photos.length !== 1 ? "s" : ""}</Text>
-          </View>
-
-          <Text style={styles.photosTip}>
-            Snap the whiteboard or your handwritten notes anytime during class
-          </Text>
-
-          {/* Photo thumbnails */}
-          {photos.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.thumbsScroll}
-              contentContainerStyle={styles.thumbsContent}
-            >
-              {photos.map((photo, i) => (
-                <View key={i} style={styles.thumbWrapper}>
-                  <Image source={{ uri: photo.uri }} style={styles.thumb} />
-                  {photo.processing && (
-                    <View style={styles.thumbOverlay}>
-                      <Text style={styles.thumbOverlayText}>⏳</Text>
-                    </View>
-                  )}
-                  {photo.extractedText && !photo.processing && (
-                    <View style={[styles.thumbOverlay, styles.thumbDone]}>
-                      <Text style={styles.thumbOverlayText}>✅</Text>
-                    </View>
-                  )}
-                  {photo.error && (
-                    <View style={[styles.thumbOverlay, styles.thumbError]}>
-                      <Text style={styles.thumbOverlayText}>⚠️</Text>
-                    </View>
-                  )}
-                  <TouchableOpacity
-                    style={styles.thumbDelete}
-                    onPress={() => handleDeletePhoto(i)}
-                  >
-                    <Text style={styles.thumbDeleteText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-
-          {/* Camera buttons */}
-          <View style={styles.cameraButtons}>
-            <TouchableOpacity
-              style={styles.cameraBtn}
-              onPress={handleTakePhoto}
-              activeOpacity={0.8}
-              id="take-photo-btn"
-            >
-              <Text style={styles.cameraBtnIcon}>📸</Text>
-              <Text style={styles.cameraBtnText}>Take Photo</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.cameraBtn, styles.cameraBtnSecondary]}
-              onPress={handlePickPhoto}
-              activeOpacity={0.8}
-              id="pick-photo-btn"
-            >
-              <Text style={styles.cameraBtnIcon}>🖼️</Text>
-              <Text style={styles.cameraBtnText}>From Library</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Course / Subject Tag */}
-        <View style={styles.inputPanel}>
-          <Text style={styles.inputLabel}>🏷️ Subject / Course</Text>
-          <TextInput
-            style={styles.textInput}
-            value={course}
-            onChangeText={setCourse}
-            placeholder="e.g. CHEM 101, History 202, etc."
-            placeholderTextColor={Colors.textMuted}
-            maxLength={30}
-          />
-        </View>
-
-        {/* Template selector */}
-        <View style={styles.templatePanel}>
-          <Text style={styles.templateTitle}>📚 Output Format</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.templateRow}>
-              {(Object.entries(TEMPLATES) as [TemplateId, typeof TEMPLATES[TemplateId]][]).map(
-                ([id, tmpl]) => (
-                  <TouchableOpacity
-                    key={id}
-                    style={[
-                      styles.templateChip,
-                      templateId === id && styles.templateChipActive,
-                    ]}
-                    onPress={() => setTemplateId(id)}
-                    id={`template-${id}`}
-                  >
-                    <Text style={styles.templateChipIcon}>{tmpl.icon}</Text>
-                    <Text
-                      style={[
-                        styles.templateChipLabel,
-                        templateId === id && styles.templateChipLabelActive,
-                      ]}
-                    >
-                      {tmpl.label}
-                    </Text>
-                  </TouchableOpacity>
-                )
-              )}
+              <Text style={styles.timer}>{formatTime(seconds)}</Text>
+              <Text style={styles.timerSub}>Lecture in progress</Text>
             </View>
-          </ScrollView>
-        </View>
 
-        {/* Stop & Generate */}
-        <TouchableOpacity
-          style={[styles.stopBtn, isGenerating && styles.stopBtnDisabled]}
-          onPress={confirmStop}
-          activeOpacity={0.85}
-          disabled={isGenerating}
-          id="stop-generate-btn"
-        >
-          <Text style={styles.stopBtnText}>
-            {isGenerating ? "⏳ Processing..." : "⏹  Stop & Generate Study Materials"}
-          </Text>
-        </TouchableOpacity>
+            {/* Course / Subject Tag */}
+            <View style={styles.inputPanel}>
+              <Text style={styles.inputLabel}>🏷️ Subject / Course</Text>
+              <TextInput
+                style={styles.textInput}
+                value={course}
+                onChangeText={setCourse}
+                placeholder="e.g. CHEM 101, History 202, etc."
+                placeholderTextColor={Colors.textMuted}
+                maxLength={30}
+              />
+            </View>
+
+            {/* Stop Recording */}
+            <TouchableOpacity
+              style={styles.stopBtn}
+              onPress={confirmStop}
+              activeOpacity={0.85}
+              id="stop-recording-btn"
+            >
+              <Text style={styles.stopBtnText}>⏹  Stop Recording & Add Photos</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            {/* Photos Step Header */}
+            <View style={styles.stepHeader}>
+              <Text style={styles.stepHeaderTitle}>📸 Step 2: Add Visuals</Text>
+              <Text style={styles.stepHeaderSub}>
+                Would you like to snap whiteboard photos or select slides for this class?
+              </Text>
+            </View>
+
+            {/* Photos Panel */}
+            <View style={styles.photosPanel}>
+              <View style={styles.photosPanelHeader}>
+                <Text style={styles.photosPanelTitle}>
+                  📷 Board & Notes Photos
+                </Text>
+                <Text style={styles.photosCount}>{photos.length} photo{photos.length !== 1 ? "s" : ""}</Text>
+              </View>
+
+              <Text style={styles.photosTip}>
+                Snap the whiteboard or your handwritten notes to explain alongside audio
+              </Text>
+
+              {/* Photo thumbnails */}
+              {photos.length > 0 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.thumbsScroll}
+                  contentContainerStyle={styles.thumbsContent}
+                >
+                  {photos.map((photo, i) => (
+                    <View key={i} style={styles.thumbWrapper}>
+                      <Image source={{ uri: photo.uri }} style={styles.thumb} />
+                      {photo.processing && (
+                        <View style={styles.thumbOverlay}>
+                          <Text style={styles.thumbOverlayText}>⏳</Text>
+                        </View>
+                      )}
+                      {photo.extractedText && !photo.processing && (
+                        <View style={[styles.thumbOverlay, styles.thumbDone]}>
+                          <Text style={styles.thumbOverlayText}>✅</Text>
+                        </View>
+                      )}
+                      {photo.error && (
+                        <View style={[styles.thumbOverlay, styles.thumbError]}>
+                          <Text style={styles.thumbOverlayText}>⚠️</Text>
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        style={styles.thumbDelete}
+                        onPress={() => handleDeletePhoto(i)}
+                      >
+                        <Text style={styles.thumbDeleteText}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Camera buttons */}
+              <View style={styles.cameraButtons}>
+                <TouchableOpacity
+                  style={styles.cameraBtn}
+                  onPress={handleTakePhoto}
+                  activeOpacity={0.8}
+                  id="take-photo-btn"
+                >
+                  <Text style={styles.cameraBtnIcon}>📸</Text>
+                  <Text style={styles.cameraBtnText}>Take Photo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.cameraBtn, styles.cameraBtnSecondary]}
+                  onPress={handlePickPhoto}
+                  activeOpacity={0.8}
+                  id="pick-photo-btn"
+                >
+                  <Text style={styles.cameraBtnIcon}>🖼️</Text>
+                  <Text style={styles.cameraBtnText}>From Library</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Template selector */}
+            <View style={styles.templatePanel}>
+              <Text style={styles.templateTitle}>📚 Output Format</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.templateRow}>
+                  {(Object.entries(TEMPLATES) as [TemplateId, typeof TEMPLATES[TemplateId]][]).map(
+                    ([id, tmpl]) => (
+                      <TouchableOpacity
+                        key={id}
+                        style={[
+                          styles.templateChip,
+                          templateId === id && styles.templateChipActive,
+                        ]}
+                        onPress={() => setTemplateId(id)}
+                        id={`template-${id}`}
+                      >
+                        <Text style={styles.templateChipIcon}>{tmpl.icon}</Text>
+                        <Text
+                          style={[
+                            styles.templateChipLabel,
+                            templateId === id && styles.templateChipLabelActive,
+                          ]}
+                        >
+                          {tmpl.label}
+                        </Text>
+                      </TouchableOpacity>
+                    )
+                  )}
+                </View>
+              </ScrollView>
+            </View>
+
+            {/* Generate Button */}
+            <TouchableOpacity
+              style={[styles.stopBtn, isGenerating && styles.stopBtnDisabled]}
+              onPress={handleFinalGenerate}
+              activeOpacity={0.85}
+              disabled={isGenerating}
+              id="final-generate-btn"
+            >
+              <Text style={styles.stopBtnText}>
+                {isGenerating ? "⏳ Processing..." : "✨ Generate Study Materials"}
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
 
         <Text style={styles.privacy}>
           🔒 Audio and photos are sent to OpenAI for processing and are not stored.{"\n"}
@@ -413,6 +444,26 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bgPrimary },
   scroll: { flex: 1 },
   content: { padding: Spacing.lg, paddingBottom: Spacing["3xl"], gap: Spacing.lg },
+
+  stepHeader: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.md,
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  stepHeaderTitle: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  stepHeaderSub: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    lineHeight: 16,
+  },
 
   inputPanel: {
     backgroundColor: Colors.bgCard,
