@@ -867,50 +867,64 @@ export default function ResultsScreen() {
           </View>
         ) : (
           <>
-            {/* Action bar for Editing */}
-            <View style={styles.editBar}>
-              <Text style={styles.editHint}>
-                {isEditing
-                  ? "✍️ Editing mode active. Don't forget to save."
-                  : "✏️ You can edit the output below before exporting."}
-              </Text>
-              {isEditing ? (
-                <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                  <Text style={styles.saveBtnText}>Save</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.editActionsRow}>
-                  <TouchableOpacity
-                    style={styles.explainBtn}
-                    onPress={() => {
-                      setExplainModalVisible(true);
-                      setConceptToExplain("");
-                      setExplanationResult("");
-                    }}
-                  >
-                    <Text style={styles.explainBtnText}>💡 ELI5</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => setIsEditing(true)}>
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-
-             {/* Content Box */}
+            {/* Content Box */}
             {isEditing ? (
-              <TextInput
-                style={[styles.textarea, styles.contentArea]}
-                value={editableContent}
-                onChangeText={setEditableContent}
-                multiline
-                textAlignVertical="top"
-              />
+              <View style={styles.contentCard}>
+                <View style={styles.contentCardHeader}>
+                  <Text style={styles.contentCardTitle}>✍️ Edit Study Summary</Text>
+                  <View style={styles.headerActionsToolbar}>
+                    <TouchableOpacity
+                      style={[styles.headerTextBtn, styles.headerTextBtnCancel]}
+                      onPress={() => setIsEditing(false)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.headerTextBtnCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.headerTextBtn, styles.headerTextBtnSave]}
+                      onPress={handleSave}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.headerTextBtnSaveText}>Save</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <TextInput
+                  style={styles.textareaInput}
+                  value={editableContent}
+                  onChangeText={setEditableContent}
+                  multiline
+                  textAlignVertical="top"
+                />
+              </View>
             ) : (
               <View style={styles.contentCard}>
                 <View style={styles.contentCardHeader}>
                   <Text style={styles.contentCardTitle}>📖 Study Summary</Text>
                   <View style={styles.headerActionsToolbar}>
+                    {/* ELI5 Tutor Button */}
+                    <TouchableOpacity
+                      style={[styles.headerIconBtn, { backgroundColor: "rgba(245,158,11,0.08)", borderColor: "rgba(245,158,11,0.2)" }]}
+                      onPress={() => {
+                        setExplainModalVisible(true);
+                        setConceptToExplain("");
+                        setExplanationResult("");
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.headerIconBtnText}>💡</Text>
+                    </TouchableOpacity>
+
+                    {/* Edit Button */}
+                    <TouchableOpacity
+                      style={styles.headerIconBtn}
+                      onPress={() => setIsEditing(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.headerIconBtnText}>✏️</Text>
+                    </TouchableOpacity>
+
+                    {/* Speak Button */}
                     <TouchableOpacity
                       style={styles.headerIconBtn}
                       onPress={handleToggleSpeech}
@@ -919,6 +933,7 @@ export default function ResultsScreen() {
                       <Text style={styles.headerIconBtnText}>{isSpeaking ? "⏹️" : "🔊"}</Text>
                     </TouchableOpacity>
 
+                    {/* Copy Button */}
                     <TouchableOpacity
                       style={styles.headerIconBtn}
                       onPress={handleCopy}
@@ -927,6 +942,7 @@ export default function ResultsScreen() {
                       <Text style={styles.headerIconBtnText}>{copied ? "✅" : "📋"}</Text>
                     </TouchableOpacity>
 
+                    {/* Share Button */}
                     <TouchableOpacity
                       style={styles.headerIconBtn}
                       onPress={handleShare}
@@ -935,6 +951,7 @@ export default function ResultsScreen() {
                       <Text style={styles.headerIconBtnText}>📤</Text>
                     </TouchableOpacity>
 
+                    {/* PDF Button */}
                     <TouchableOpacity
                       style={styles.headerIconBtn}
                       onPress={handleExportPDF}
@@ -943,6 +960,7 @@ export default function ResultsScreen() {
                       <Text style={styles.headerIconBtnText}>📄</Text>
                     </TouchableOpacity>
 
+                    {/* Anki Button */}
                     {session.templateId === "flashcards" && (
                       <TouchableOpacity
                         style={styles.headerIconBtn}
@@ -953,6 +971,7 @@ export default function ResultsScreen() {
                       </TouchableOpacity>
                     )}
 
+                    {/* Fullscreen Button */}
                     <TouchableOpacity
                       style={styles.headerIconBtn}
                       onPress={() => setReadingMaximized(true)}
@@ -1626,12 +1645,11 @@ const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: Colors.bgPrimary, justifyContent: "center", alignItems: "center" },
 
   header: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.md,
-    gap: Spacing.sm,
+    backgroundColor: "transparent",
+    paddingHorizontal: 4,
+    paddingVertical: Spacing.xs,
+    gap: Spacing.xs,
+    marginBottom: -Spacing.xs, // pull summary up closer!
   },
   headerTitleRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
   templateIcon: { fontSize: 24 },
@@ -2542,5 +2560,41 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontWeight: FontWeight.bold,
     fontSize: FontSize.sm,
+  },
+
+  // Header Save / Cancel Text buttons
+  headerTextBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.sm,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerTextBtnCancel: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  headerTextBtnCancelText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: FontWeight.bold,
+  },
+  headerTextBtnSave: {
+    backgroundColor: Colors.accent3,
+  },
+  headerTextBtnSaveText: {
+    fontSize: 11,
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
+  },
+  textareaInput: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontFamily: "monospace",
+    fontSize: FontSize.sm,
+    lineHeight: 22,
+    textAlignVertical: "top",
+    marginTop: Spacing.xs,
   },
 });
