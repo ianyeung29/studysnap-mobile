@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
 
 interface BottomNavProps {
@@ -9,9 +10,17 @@ interface BottomNavProps {
 
 export default function BottomNav({ currentTab }: BottomNavProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+
+  // Dynamically determine bottom padding to avoid overlapping system navigation keys on Android & iOS
+  const bottomPadding = Platform.OS === "ios"
+    ? (insets.bottom > 0 ? insets.bottom : 24)
+    : (insets.bottom > 0 ? insets.bottom + 8 : 24); // Ensure 24px baseline or inset + 8px on Android
+
+  const navBarHeight = 50 + bottomPadding;
 
   return (
-    <View style={styles.navBar}>
+    <View style={[styles.navBar, { paddingBottom: bottomPadding, height: navBarHeight }]}>
       {/* Home Tab */}
       <TouchableOpacity
         style={styles.navItem}
@@ -56,7 +65,7 @@ export default function BottomNav({ currentTab }: BottomNavProps) {
       </TouchableOpacity>
 
       {/* Floating Centered Microphone Button */}
-      <View style={styles.recordContainer}>
+      <View style={[styles.recordContainer, { top: -24 }]}>
         <TouchableOpacity
           style={styles.recordButton}
           activeOpacity={0.85}
@@ -75,13 +84,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(15, 10, 25, 0.95)", // dark solid backing
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-    paddingBottom: Platform.OS === "ios" ? 24 : 12,
     paddingTop: 10,
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    height: Platform.OS === "ios" ? 84 : 70,
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: Spacing.xs,
