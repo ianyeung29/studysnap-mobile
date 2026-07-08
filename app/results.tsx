@@ -942,7 +942,7 @@ export default function ResultsScreen() {
                       onPress={() => setReadingMaximized(true)}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.headerIconBtnText}>⤢</Text>
+                      <Text style={styles.headerIconBtnText}>📖</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
