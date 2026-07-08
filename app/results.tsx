@@ -902,12 +902,49 @@ export default function ResultsScreen() {
               <View style={styles.contentCard}>
                 <View style={styles.contentCardHeader}>
                   <Text style={styles.contentCardTitle}>📖 Study Summary</Text>
-                  <TouchableOpacity
-                    style={styles.maximizeBtn}
-                    onPress={() => setReadingMaximized(true)}
-                  >
-                    <Text style={styles.maximizeBtnText}>⤢ Fullscreen</Text>
-                  </TouchableOpacity>
+                  <View style={styles.headerActionsToolbar}>
+                    <TouchableOpacity
+                      style={styles.headerIconBtn}
+                      onPress={handleCopy}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.headerIconBtnText}>{copied ? "✅" : "📋"}</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.headerIconBtn}
+                      onPress={handleShare}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.headerIconBtnText}>📤</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.headerIconBtn}
+                      onPress={handleExportPDF}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.headerIconBtnText}>📄</Text>
+                    </TouchableOpacity>
+
+                    {session.templateId === "flashcards" && (
+                      <TouchableOpacity
+                        style={styles.headerIconBtn}
+                        onPress={handleExportAnki}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.headerIconBtnText}>🃏</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                      style={styles.headerIconBtn}
+                      onPress={() => setReadingMaximized(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.headerIconBtnText}>⤢</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 <ScrollView style={styles.readOnlyScroll} nestedScrollEnabled>
                   <MarkdownText text={editableContent} />
@@ -951,32 +988,7 @@ export default function ResultsScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Export Buttons */}
-            <View style={styles.exportBar}>
-              <TouchableOpacity
-                style={[styles.exportBtn, copied && styles.exportBtnSuccess]}
-                onPress={handleCopy}
-                id="copy-to-clipboard-btn"
-              >
-                <Text style={styles.exportBtnText}>
-                  {copied ? "✅ Copied" : "📋 Copy"}
-                </Text>
-              </TouchableOpacity>
 
-              <TouchableOpacity style={styles.exportBtn} onPress={handleShare} id="native-share-btn">
-                <Text style={styles.exportBtnText}>📤 Share</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.exportBtn} onPress={handleExportPDF} id="export-pdf-btn">
-                <Text style={styles.exportBtnText}>📄 PDF</Text>
-              </TouchableOpacity>
-
-              {session.templateId === "flashcards" && (
-                <TouchableOpacity style={styles.exportBtn} onPress={handleExportAnki} id="export-anki-btn">
-                  <Text style={styles.exportBtnText}>🃏 Anki</Text>
-                </TouchableOpacity>
-              )}
-            </View>
 
             {/* Converter / Regenerator Options */}
             <View style={styles.convertPanel}>
@@ -1606,8 +1618,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     padding: Spacing.md,
-    minHeight: 320,
-    maxHeight: 480,
+    minHeight: 420,
+    maxHeight: 640,
   },
   readOnlyScroll: { flex: 1 },
   contentText: {
@@ -1626,8 +1638,8 @@ const styles = StyleSheet.create({
     fontFamily: "monospace",
     fontSize: FontSize.base,
     padding: Spacing.md,
-    minHeight: 320,
-    maxHeight: 480,
+    minHeight: 420,
+    maxHeight: 640,
   },
   contentArea: { lineHeight: 24 },
 
@@ -2392,5 +2404,23 @@ const styles = StyleSheet.create({
   fullscreenScrollContent: {
     padding: Spacing.lg,
     paddingBottom: Spacing["3xl"],
+  },
+  headerActionsToolbar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
+  headerIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.sm,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  headerIconBtnText: {
+    fontSize: 14,
   },
 });
