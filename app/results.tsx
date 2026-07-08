@@ -26,6 +26,8 @@ import { summarize, transcribeAudio } from "@/lib/api";
 import MarkdownText from "@/components/MarkdownText";
 import { scheduleCustomReminder } from "../lib/notifications";
 import { Feather } from "@expo/vector-icons";
+import { subscriptionService } from "@/lib/subscription";
+import SubscriptionPaywall from "@/components/SubscriptionPaywall";
 
 export default function ResultsScreen() {
   const router = useRouter();
@@ -78,6 +80,10 @@ export default function ResultsScreen() {
 
   // Document More Actions Menu
   const [moreMenuVisible, setMoreMenuVisible] = useState(false);
+
+  // Premium / Subscription states
+  const [isPremium, setIsPremium] = useState(false);
+  const [paywallVisible, setPaywallVisible] = useState(false);
 
   // Stop speech on unmount
   const [isRetrying, setIsRetrying] = useState(false);
@@ -152,6 +158,17 @@ export default function ResultsScreen() {
   };
 
   const handleReimportAudio = async () => {
+    if (!isPremium) {
+      Alert.alert(
+        "Premium Feature",
+        "Audio re-imports are available for Premium subscribers. Would you like to view our plans?",
+        [
+          { text: "View Plans", onPress: () => setPaywallVisible(true) },
+          { text: "Cancel", style: "cancel" },
+        ]
+      );
+      return;
+    }
     if (!session) return;
     try {
       const DocumentPicker = await import("expo-document-picker");
@@ -214,6 +231,9 @@ export default function ResultsScreen() {
           setEditableCourse(found.course || "General");
           setEditableParentFolder(found.parentFolder || "General Folders");
         }
+      });
+      subscriptionService.getEntitlement().then((entitlement) => {
+        setIsPremium(entitlement.isActive);
       });
     }
   }, [params.sessionId]);
@@ -317,6 +337,17 @@ export default function ResultsScreen() {
   };
 
   const handleExportPDF = useCallback(async () => {
+    if (!isPremium) {
+      Alert.alert(
+        "Premium Feature",
+        "PDF exports are available for Premium subscribers. Would you like to view our plans?",
+        [
+          { text: "View Plans", onPress: () => setPaywallVisible(true) },
+          { text: "Cancel", style: "cancel" },
+        ]
+      );
+      return;
+    }
     if (!session || !editableContent) return;
     try {
       const styledHTMLContent = parseMarkdownToHTML(editableContent);
@@ -586,6 +617,17 @@ export default function ResultsScreen() {
   };
 
   const handleExportAnki = async () => {
+    if (!isPremium) {
+      Alert.alert(
+        "Premium Feature",
+        "Anki flashcard exports are available for Premium subscribers. Would you like to view our plans?",
+        [
+          { text: "View Plans", onPress: () => setPaywallVisible(true) },
+          { text: "Cancel", style: "cancel" },
+        ]
+      );
+      return;
+    }
     try {
       const tsvContent = parseFlashcardsToTSV(editableContent);
       if (!tsvContent.trim()) {
@@ -1729,6 +1771,16 @@ export default function ResultsScreen() {
           </View>
         </Modal>
       )}
+
+      {/* Premium Subscription Paywall */}
+      <SubscriptionPaywall
+        visible={paywallVisible}
+        onClose={() => setPaywallVisible(false)}
+        onPurchaseSuccess={async () => {
+          const entitlement = await subscriptionService.getEntitlement();
+          setIsPremium(entitlement.isActive);
+        }}
+      />
     </SafeAreaView>
   );
 }
