@@ -782,9 +782,6 @@ export default function ResultsScreen() {
                 <Text style={styles.title}>{session.title}</Text>
               )}
             </View>
-            <TouchableOpacity style={styles.ttsBtn} onPress={handleToggleSpeech}>
-              <Text style={styles.ttsBtnIcon}>{isSpeaking ? "⏹️" : "🔊"}</Text>
-            </TouchableOpacity>
             <TouchableOpacity style={styles.ttsBtn} onPress={handleScheduleReminders}>
               <Text style={styles.ttsBtnIcon}>⏰</Text>
             </TouchableOpacity>
@@ -903,6 +900,14 @@ export default function ResultsScreen() {
                 <View style={styles.contentCardHeader}>
                   <Text style={styles.contentCardTitle}>📖 Study Summary</Text>
                   <View style={styles.headerActionsToolbar}>
+                    <TouchableOpacity
+                      style={styles.headerIconBtn}
+                      onPress={handleToggleSpeech}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.headerIconBtnText}>{isSpeaking ? "⏹️" : "🔊"}</Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity
                       style={styles.headerIconBtn}
                       onPress={handleCopy}
@@ -1547,7 +1552,7 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   headerTitleRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
-  templateIcon: { fontSize: 32 },
+  templateIcon: { fontSize: 24 },
   titleInfo: { flex: 1, marginRight: Spacing.xs },
   templateLabel: { fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.bold, letterSpacing: 1, textTransform: "uppercase" },
   title: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, flexWrap: "wrap" },
