@@ -22,6 +22,7 @@ export interface Session {
   photoUris?: string[];
   photoTexts?: string[];
   isMasterGuide?: boolean;
+  extraNotes?: string;
 }
 
 export async function saveSessions(sessions: Session[]): Promise<void> {

@@ -114,6 +114,10 @@ export default function ResultsScreen() {
         });
       }
 
+      if (session.extraNotes && session.extraNotes.trim()) {
+        parts.push(`=== ATTACHED STUDY MATERIALS & REFERENCE NOTES ===\n${session.extraNotes.trim()}`);
+      }
+
       const combinedNotes = parts.join("\n\n");
       if (!combinedNotes.trim()) {
         throw new Error("No notes content found to compile.");

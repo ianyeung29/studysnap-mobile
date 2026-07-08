@@ -50,6 +50,7 @@ export default function SessionScreen() {
   // Processing
   const [isGenerating, setIsGenerating] = useState(false);
   const [course, setCourse] = useState("");
+  const [extraNotes, setExtraNotes] = useState("");
   const [step, setStep] = useState<"recording" | "photos">("recording");
   const [recordedAudioUri, setRecordedAudioUri] = useState<string | null>(null);
   const [markers, setMarkers] = useState<string[]>([]);
@@ -265,13 +266,14 @@ export default function SessionScreen() {
           templateId,
           course: course.trim(),
           markers: JSON.stringify(markers),
+          extraNotes: extraNotes.trim(),
         },
       });
     } catch (e) {
       Alert.alert("Error", "Something went wrong. Please try again.");
       setIsGenerating(false);
     }
-  }, [isGenerating, photos, seconds, templateId, router, recordedAudioUri, course]);
+  }, [isGenerating, photos, seconds, templateId, router, recordedAudioUri, course, extraNotes]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["bottom"]}>
@@ -439,6 +441,19 @@ export default function SessionScreen() {
                   <Text style={styles.cameraBtnText}>From Library</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+
+            {/* Extra notes / Study materials input */}
+            <View style={styles.inputPanel}>
+              <Text style={styles.inputLabel}>📝 Attach Extra Notes / Study Materials</Text>
+              <TextInput
+                style={[styles.textInput, { minHeight: 80, textAlignVertical: "top" }]}
+                value={extraNotes}
+                onChangeText={setExtraNotes}
+                placeholder="Paste outlines, textbook excerpts, syllabus details to combine with lecture audio/photos..."
+                placeholderTextColor={Colors.textMuted}
+                multiline
+              />
             </View>
 
             {/* Template selector */}

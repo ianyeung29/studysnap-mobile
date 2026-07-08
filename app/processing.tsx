@@ -27,6 +27,7 @@ export default function ProcessingScreen() {
     templateId: string;
     course: string;
     markers?: string;
+    extraNotes?: string;
   }>();
 
   const [steps, setSteps] = useState<Step[]>([]);
@@ -63,6 +64,7 @@ export default function ProcessingScreen() {
     const existingPhotoTexts: string[] = JSON.parse(params.photoTexts || "[]");
     const durationSeconds = parseInt(params.durationSeconds || "0");
     const templateId = params.templateId || "study-guide";
+    const extraNotes = params.extraNotes || "";
 
     // Build initial steps
     const initialSteps: Step[] = [
@@ -152,6 +154,11 @@ export default function ProcessingScreen() {
         parts.push(`=== IN-CLASS TIMESTAMPS & NOTES ===\n${markers.join("\n")}`);
       }
 
+      // Append extra attached notes/materials if present
+      if (extraNotes && extraNotes.trim()) {
+        parts.push(`=== ATTACHED STUDY MATERIALS & REFERENCE NOTES ===\n${extraNotes.trim()}`);
+      }
+
       const combinedNotes = parts.join("\n\n");
 
       if (!combinedNotes.trim()) {
@@ -186,6 +193,7 @@ export default function ProcessingScreen() {
           photoUris,
           photoTexts: existingPhotoTexts,
           isFailed: true,
+          extraNotes: params.extraNotes,
         };
         await addSession(failedSession);
       } catch (saveErr) {
@@ -235,6 +243,7 @@ export default function ProcessingScreen() {
         photoUris,
         photoTexts,
         isFailed: false,
+        extraNotes: params.extraNotes,
       };
       await addSession(session);
       updateStep("save", "done", "Session saved ✓");
@@ -265,6 +274,7 @@ export default function ProcessingScreen() {
           photoUris,
           photoTexts,
           isFailed: true,
+          extraNotes: params.extraNotes,
         };
         await addSession(failedSession);
       } catch (saveErr) {
