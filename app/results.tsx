@@ -34,11 +34,14 @@ export default function ResultsScreen() {
   const [copied, setCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
-  // ELI5 Modal State
+  // Teach Me Mode (AI Tutor) States
   const [explainModalVisible, setExplainModalVisible] = useState(false);
   const [conceptToExplain, setConceptToExplain] = useState("");
   const [explanationResult, setExplanationResult] = useState("");
   const [explaining, setExplaining] = useState(false);
+  const [tutorMode, setTutorMode] = useState<string>("eli5");
+  const [userAnswer, setUserAnswer] = useState<string>("");
+  const [checkingAnswer, setCheckingAnswer] = useState<boolean>(false);
 
   // Flashcard Player State
   const [cardPlayerVisible, setCardPlayerVisible] = useState(false);
@@ -439,15 +442,35 @@ export default function ResultsScreen() {
     }
     setExplaining(true);
     setExplanationResult("");
+    setUserAnswer(""); // Reset quiz answer
     try {
       const { explainConcept } = await import("@/lib/api");
-      const resultText = await explainConcept(conceptToExplain, editableContent);
+      const resultText = await explainConcept(conceptToExplain, editableContent, tutorMode);
       setExplanationResult(resultText);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to generate explanation.";
       Alert.alert("Error", msg);
     } finally {
       setExplaining(false);
+    }
+  };
+
+  const handleCheckQuizAnswer = async () => {
+    if (!userAnswer.trim()) {
+      Alert.alert("Input Required", "Please type your answer before submitting.");
+      return;
+    }
+    setCheckingAnswer(true);
+    try {
+      const { explainConcept } = await import("@/lib/api");
+      const resultText = await explainConcept(conceptToExplain, editableContent, "check-quiz", userAnswer);
+      // Append the tutor evaluation
+      setExplanationResult((prev) => `${prev}\n\n---\n\n👨‍🏫 **Tutor Evaluation:**\n${resultText}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to grade answer.";
+      Alert.alert("Error", msg);
+    } finally {
+      setCheckingAnswer(false);
     }
   };
 
@@ -648,22 +671,61 @@ export default function ResultsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>💡 Concept Simplifier (ELI5)</Text>
+              <Text style={styles.modalTitle}>🎓 Teach Me Mode (AI Tutor)</Text>
               <TouchableOpacity onPress={() => setExplainModalVisible(false)}>
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
 
             <Text style={styles.modalSubtitle}>
-              Type any concept from this lecture to get a simple, creative analogy.
+              Select a tutoring style and type the concept you want to master.
             </Text>
+
+            {/* Tutor Style Selector Chips */}
+            <View style={styles.tutorModesContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.tutorRow}>
+                  {[
+                    { id: "eli5", icon: "👶", label: "ELI5 Analogy" },
+                    { id: "simpler", icon: "📝", label: "Explain Simpler" },
+                    { id: "normal", icon: "👨‍🏫", label: "Explain Normally" },
+                    { id: "analogy", icon: "💡", label: "Daily Analogy" },
+                    { id: "example", icon: "🚶", label: "Walkthrough Example" },
+                    { id: "quiz", icon: "❓", label: "Quiz Me" },
+                  ].map((modeItem) => (
+                    <TouchableOpacity
+                      key={modeItem.id}
+                      style={[
+                        styles.tutorChip,
+                        tutorMode === modeItem.id && styles.tutorChipActive,
+                      ]}
+                      onPress={() => {
+                        setTutorMode(modeItem.id);
+                        setExplanationResult(""); // clear previous when switching modes
+                        setUserAnswer("");
+                      }}
+                    >
+                      <Text style={styles.tutorChipIcon}>{modeItem.icon}</Text>
+                      <Text
+                        style={[
+                          styles.tutorChipLabel,
+                          tutorMode === modeItem.id && styles.tutorChipLabelActive,
+                        ]}
+                      >
+                        {modeItem.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
 
             <View style={styles.modalInputRow}>
               <TextInput
                 style={styles.modalInput}
                 value={conceptToExplain}
                 onChangeText={setConceptToExplain}
-                placeholder="e.g. Mitochondria, Backpropagation"
+                placeholder="e.g. Photosynthesis, Supply and Demand"
                 placeholderTextColor={Colors.textMuted}
                 maxLength={40}
               />
@@ -675,7 +737,7 @@ export default function ResultsScreen() {
                 {explaining ? (
                   <ActivityIndicator color={Colors.white} size="small" />
                 ) : (
-                  <Text style={styles.modalSubmitBtnText}>Explain</Text>
+                  <Text style={styles.modalSubmitBtnText}>Teach Me</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -684,13 +746,39 @@ export default function ResultsScreen() {
               {explanationResult ? (
                 <Text style={styles.explanationText}>{explanationResult}</Text>
               ) : explaining ? (
-                <Text style={styles.explanationPlaceholder}>⏳ Brewing a simple analogy...</Text>
+                <Text style={styles.explanationPlaceholder}>⏳ AI Tutor is preparing lesson...</Text>
               ) : (
                 <Text style={styles.explanationPlaceholder}>
-                  Analogies will appear here to help you study...
+                  Select a style, enter a concept, and click "Teach Me" to start!
                 </Text>
               )}
             </ScrollView>
+
+            {/* Quiz Answering Section */}
+            {tutorMode === "quiz" && explanationResult.length > 0 && (
+              <View style={styles.quizAnswerPanel}>
+                <Text style={styles.quizAnswerLabel}>📝 Test Your Understanding:</Text>
+                <TextInput
+                  style={styles.quizInput}
+                  value={userAnswer}
+                  onChangeText={setUserAnswer}
+                  placeholder="Type your response here..."
+                  placeholderTextColor={Colors.textMuted}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={[styles.quizSubmitBtn, checkingAnswer && styles.quizSubmitBtnDisabled]}
+                  onPress={handleCheckQuizAnswer}
+                  disabled={checkingAnswer}
+                >
+                  {checkingAnswer ? (
+                    <ActivityIndicator color={Colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.quizSubmitBtnText}>Submit Answer</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -1244,6 +1332,86 @@ const styles = StyleSheet.create({
   },
   retryLoaderText: {
     color: Colors.textSecondary,
+    fontSize: FontSize.sm,
+  },
+
+  // Teach Me Tutor Modes Layout
+  tutorModesContainer: {
+    width: "100%",
+    marginBottom: Spacing.sm,
+  },
+  tutorRow: {
+    flexDirection: "row",
+    gap: Spacing.xs,
+    paddingVertical: 4,
+  },
+  tutorChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  tutorChipActive: {
+    backgroundColor: "rgba(168,85,247,0.12)",
+    borderColor: Colors.accent3,
+  },
+  tutorChipIcon: {
+    fontSize: FontSize.xs,
+  },
+  tutorChipLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: FontWeight.semibold,
+  },
+  tutorChipLabelActive: {
+    color: Colors.accent3,
+  },
+
+  // Quiz Panel
+  quizAnswerPanel: {
+    width: "100%",
+    backgroundColor: Colors.bgInput,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginTop: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  quizAnswerLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  quizInput: {
+    backgroundColor: Colors.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.sm,
+    padding: Spacing.sm,
+    color: Colors.textPrimary,
+    fontSize: FontSize.sm,
+    minHeight: 48,
+    textAlignVertical: "top",
+  },
+  quizSubmitBtn: {
+    backgroundColor: Colors.accent3,
+    borderRadius: Radius.sm,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  quizSubmitBtnDisabled: {
+    opacity: 0.6,
+  },
+  quizSubmitBtnText: {
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
     fontSize: FontSize.sm,
   },
 });

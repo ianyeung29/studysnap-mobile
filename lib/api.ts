@@ -140,10 +140,12 @@ export async function summarize(
   };
 }
 
-// ─── Explain Concept (ELI5) ──────────────────────────────────
+// ─── Explain Concept (Tutor Mode) ─────────────────────────────
 export async function explainConcept(
   concept: string,
-  context: string
+  context: string,
+  mode: string = "eli5",
+  userAnswer: string = ""
 ): Promise<string> {
   const res = await loggedFetch(`${API_BASE_URL}/api/explain`, {
     method: "POST",
@@ -151,7 +153,7 @@ export async function explainConcept(
       "Content-Type": "application/json",
       "Bypass-Tunnel-Reminder": "true",
     },
-    body: JSON.stringify({ concept, context }),
+    body: JSON.stringify({ concept, context, mode, userAnswer }),
   });
 
   if (!res.ok) {
