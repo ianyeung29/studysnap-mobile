@@ -24,6 +24,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { TEMPLATES, TemplateId } from "@/lib/templates";
 import { summarize, transcribeAudio } from "@/lib/api";
 import MarkdownText from "@/components/MarkdownText";
+import { scheduleCustomReminder } from "../lib/notifications";
 
 export default function ResultsScreen() {
   const router = useRouter();
@@ -751,12 +752,13 @@ export default function ResultsScreen() {
   const handleSetReminder = async (hours: number, label: string) => {
     if (!session) return;
     try {
-      const { scheduleCustomReminder } = await import("@/lib/notifications");
       const seconds = hours * 3600;
       await scheduleCustomReminder(session.id, session.title, seconds, label);
       setReminderModalVisible(false);
     } catch (e) {
-      Alert.alert("Error", "Could not set reminder.");
+      console.error("Failed to set reminder:", e);
+      const errMsg = e instanceof Error ? e.message : "Could not set reminder.";
+      Alert.alert("Scheduling Failed", errMsg);
     }
   };
 
