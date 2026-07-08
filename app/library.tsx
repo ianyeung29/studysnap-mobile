@@ -82,6 +82,14 @@ export default function LibraryScreen() {
   const getNestedFolders = () => {
     const tree: Record<string, Record<string, Session[]>> = {};
 
+    // Initialize with all parent folders in parentOrder list so empty folders render
+    parentOrder.forEach((p) => {
+      const clean = p.trim();
+      if (clean) {
+        tree[clean] = {};
+      }
+    });
+
     sessions.forEach((s) => {
       const parent = s.parentFolder?.trim() || "General Folders";
       const sub = s.course?.trim() || "General";
