@@ -18,46 +18,18 @@ import BottomNav from "@/components/BottomNav";
 export default function HomeScreen() {
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [allSessions, setAllSessions] = useState<Session[]>([]);
-  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       loadSessions().then((s: Session[]) => {
-        setAllSessions(s);
         setSessions(s);
         setLoading(false);
       });
     }, [])
   );
 
-  const getCourseMetrics = () => {
-    const coursesMap: Record<string, { sessionsCount: number; cardCount: number }> = {};
-    allSessions.forEach((s) => {
-      const courseName = s.course || "General";
-      if (!coursesMap[courseName]) {
-        coursesMap[courseName] = { sessionsCount: 0, cardCount: 0 };
-      }
-      coursesMap[courseName].sessionsCount += 1;
-      
-      if (s.templateId === "flashcards" && s.content) {
-        const cards = s.content.split("---").length;
-        coursesMap[courseName].cardCount += cards;
-      }
-    });
-
-    return Object.entries(coursesMap).map(([name, metrics]) => ({
-      name,
-      ...metrics,
-    }));
-  };
-
-  const courseMetrics = getCourseMetrics();
-
-  const displayedSessions = selectedCourse 
-    ? allSessions.filter((s) => (s.course || "General") === selectedCourse)
-    : allSessions.slice(0, 5);
+  const displayedSessions = sessions.slice(0, 5);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -142,46 +114,11 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* Course Folders Grid */}
-        {courseMetrics.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>My Courses</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.foldersRow}
-            >
-              {courseMetrics.map((course) => {
-                const isActive = selectedCourse === course.name;
-                return (
-                  <TouchableOpacity
-                    key={course.name}
-                    style={[styles.folderCard, isActive && styles.folderCardActive]}
-                    onPress={() => setSelectedCourse((prev) => (prev === course.name ? null : course.name))}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.folderIcon}>📁</Text>
-                    <Text style={styles.folderTitle} numberOfLines={1}>
-                      {course.name}
-                    </Text>
-                    <Text style={styles.folderMeta}>
-                      {course.sessionsCount} session{course.sessionsCount !== 1 ? "s" : ""}
-                      {course.cardCount > 0 ? ` · ${course.cardCount} cards` : ""}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
-
         {/* Recent Sessions */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              {selectedCourse ? `Folder: ${selectedCourse}` : "Recent Sessions"}
-            </Text>
-            {allSessions.length > 0 && (
+            <Text style={styles.sectionTitle}>Recent Sessions</Text>
+            {sessions.length > 0 && (
               <TouchableOpacity onPress={() => router.push("/history")}>
                 <Text style={styles.seeAll}>See all →</Text>
               </TouchableOpacity>
@@ -422,39 +359,5 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold,
     color: Colors.textPrimary,
-  },
-
-  // Course Folders Grid Layout
-  foldersRow: {
-    gap: Spacing.md,
-    paddingVertical: 4,
-    paddingRight: Spacing.lg,
-  },
-  folderCard: {
-    width: 144,
-    height: 112,
-    backgroundColor: Colors.bgCard,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    justifyContent: "space-between",
-  },
-  folderCardActive: {
-    borderColor: Colors.accent3,
-    backgroundColor: "rgba(168,85,247,0.06)",
-  },
-  folderIcon: {
-    fontSize: 24,
-  },
-  folderTitle: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
-    color: Colors.textPrimary,
-    marginTop: Spacing.xs,
-  },
-  folderMeta: {
-    fontSize: 10,
-    color: Colors.textMuted,
   },
 });
