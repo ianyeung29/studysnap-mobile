@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
 
 interface BottomNavProps {
-  currentTab: "home" | "search" | "practice";
+  currentTab: "home" | "library" | "search" | "practice";
 }
 
 export default function BottomNav({ currentTab }: BottomNavProps) {
@@ -22,6 +22,19 @@ export default function BottomNav({ currentTab }: BottomNavProps) {
         <Text style={[styles.navLabel, currentTab === "home" && styles.navLabelActive]}>Home</Text>
       </TouchableOpacity>
 
+      {/* Library Tab */}
+      <TouchableOpacity
+        style={styles.navItem}
+        activeOpacity={0.7}
+        onPress={() => router.replace("/library")}
+      >
+        <Text style={[styles.navIcon, currentTab === "library" && styles.navIconActive]}>📁</Text>
+        <Text style={[styles.navLabel, currentTab === "library" && styles.navLabelActive]}>Library</Text>
+      </TouchableOpacity>
+
+      {/* Centered Record Button Placeholder */}
+      <View style={styles.centerSpacer} />
+
       {/* Search Tab */}
       <TouchableOpacity
         style={styles.navItem}
@@ -31,17 +44,6 @@ export default function BottomNav({ currentTab }: BottomNavProps) {
         <Text style={[styles.navIcon, currentTab === "search" && styles.navIconActive]}>🔍</Text>
         <Text style={[styles.navLabel, currentTab === "search" && styles.navLabelActive]}>Search</Text>
       </TouchableOpacity>
-
-      {/* Centered Record Button */}
-      <View style={styles.recordContainer}>
-        <TouchableOpacity
-          style={styles.recordButton}
-          activeOpacity={0.85}
-          onPress={() => router.push("/session")}
-        >
-          <Text style={styles.recordButtonIcon}>🎙️</Text>
-        </TouchableOpacity>
-      </View>
 
       {/* Practice Tab */}
       <TouchableOpacity
@@ -53,8 +55,16 @@ export default function BottomNav({ currentTab }: BottomNavProps) {
         <Text style={[styles.navLabel, currentTab === "practice" && styles.navLabelActive]}>Practice</Text>
       </TouchableOpacity>
 
-      {/* Dummy placeholder to align elements around the center button */}
-      <View style={styles.navItemSpacer} />
+      {/* Floating Centered Microphone Button */}
+      <View style={styles.recordContainer}>
+        <TouchableOpacity
+          style={styles.recordButton}
+          activeOpacity={0.85}
+          onPress={() => router.push("/session")}
+        >
+          <Text style={styles.recordButtonIcon}>🎙️</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -73,8 +83,8 @@ const styles = StyleSheet.create({
     right: 0,
     height: Platform.OS === "ios" ? 84 : 70,
     alignItems: "center",
-    justifyContent: "space-around",
-    paddingHorizontal: Spacing.md,
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.xs,
   },
   navItem: {
     alignItems: "center",
@@ -82,9 +92,8 @@ const styles = StyleSheet.create({
     flex: 1,
     height: "100%",
   },
-  navItemSpacer: {
-    width: 60, // spacer matching the mic button width to keep it centered
-    display: "none", // we handle the center positioning absolute now
+  centerSpacer: {
+    width: 68, // leaves a perfect gap for the absolute record button
   },
   navIcon: {
     fontSize: 20,
@@ -92,7 +101,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   navIconActive: {
-    color: Colors.accent3, // purple accent for active
+    color: Colors.accent3, // purple active accent
     opacity: 1,
   },
   navLabel: {
@@ -106,21 +115,21 @@ const styles = StyleSheet.create({
   },
   recordContainer: {
     position: "absolute",
-    top: -24, // float up
+    top: -24, // float up above the bar
     left: "50%",
-    marginLeft: -28, // half of button size (56/2)
+    marginLeft: -28, // center mathematically (56/2)
     zIndex: 10,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.bgPrimary, // backing
+    backgroundColor: Colors.bgPrimary, // border backing
     padding: 3,
   },
   recordButton: {
     width: "100%",
     height: "100%",
     borderRadius: 25,
-    backgroundColor: "#ec4899", // bright pink microphone button matching competitor
+    backgroundColor: "#ec4899", // bright hot-pink microphone button
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#ec4899",
