@@ -7,8 +7,8 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import { useEffect, useState, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
 import { loadSessions, Session, formatDate, formatDuration } from "@/lib/storage";
@@ -19,12 +19,14 @@ export default function HomeScreen() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadSessions().then((s: Session[]) => {
-      setSessions(s.slice(0, 5));
-      setLoading(false);
-    });
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadSessions().then((s: Session[]) => {
+        setSessions(s.slice(0, 5));
+        setLoading(false);
+      });
+    }, [])
+  );
 
   return (
     <SafeAreaView style={styles.safe}>

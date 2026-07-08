@@ -10,8 +10,8 @@ import {
   TextInput,
   ScrollView,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import { useEffect, useState, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
 import { loadSessions, Session, deleteSession, formatDate, formatDuration } from "@/lib/storage";
@@ -27,12 +27,14 @@ export default function HistoryScreen() {
   const [activeCourse, setActiveCourse] = useState("All");
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
 
-  useEffect(() => {
-    loadSessions().then((s: Session[]) => {
-      setSessions(s);
-      setLoading(false);
-    });
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadSessions().then((s: Session[]) => {
+        setSessions(s);
+        setLoading(false);
+      });
+    }, [])
+  );
 
   const handleDelete = (id: string, title: string) => {
     Alert.alert(
