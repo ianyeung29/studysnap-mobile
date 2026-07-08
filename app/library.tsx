@@ -274,10 +274,10 @@ export default function LibraryScreen() {
               style={styles.addParentBtn}
               onPress={() => setCreateParentModalVisible(true)}
             >
-              <Text style={styles.addParentBtnText}>➕ New Semester</Text>
+              <Text style={styles.addParentBtnText}>➕ Folder</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.subtitle}>Organize classes (sub-folders) under Semesters (parent folders)</Text>
+          <Text style={styles.subtitle}>Organize folders (sub-folders) under Parent Folders (e.g. semesters)</Text>
         </View>
 
         <ScrollView
@@ -524,8 +524,8 @@ export default function LibraryScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>➕ Create Semester Folder</Text>
-            <Text style={styles.modalSub}>Create a parent container folder (e.g. "Spring 2026", "Summer Term") to keep your classes sorted.</Text>
+            <Text style={styles.modalTitle}>➕ Create Parent Folder</Text>
+            <Text style={styles.modalSub}>Create a parent container folder (e.g. "Spring 2026", "Personal Study") to keep your categories sorted.</Text>
             <TextInput
               style={styles.modalInput}
               value={newParentInput}
@@ -693,8 +693,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   subFoldersList: {
-    paddingLeft: Spacing.md,
-    backgroundColor: "rgba(0,0,0,0.1)",
+    paddingLeft: Spacing.lg,
+    marginLeft: Spacing.md,
+    borderLeftWidth: 2,
+    borderLeftColor: "rgba(255, 255, 255, 0.08)",
+    backgroundColor: "rgba(0,0,0,0.06)",
+    paddingVertical: Spacing.xs,
   },
   emptySubtext: {
     fontSize: FontSize.xs,
@@ -703,40 +707,42 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   subContainer: {
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.03)",
+    borderBottomWidth: 0,
   },
   subHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.sm,
     paddingRight: Spacing.md,
   },
   subTitleSection: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.sm,
+    gap: Spacing.xs,
     flex: 1,
   },
   subIcon: {
-    fontSize: 20,
+    fontSize: 16,
+    opacity: 0.8,
   },
   subName: {
-    fontSize: FontSize.sm,
+    fontSize: FontSize.xs,
     fontWeight: FontWeight.bold,
-    color: Colors.textPrimary,
+    color: Colors.textSecondary,
   },
   subCount: {
-    fontSize: 10,
+    fontSize: 9,
     color: Colors.textMuted,
-    marginTop: 2,
+    marginTop: 1,
   },
   sessionsSublist: {
     paddingLeft: Spacing.md,
-    backgroundColor: "rgba(0,0,0,0.2)",
-    borderLeftWidth: 1,
+    backgroundColor: "rgba(0,0,0,0.1)",
+    borderLeftWidth: 1.5,
     borderLeftColor: Colors.accent3,
+    marginLeft: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   sessionItemRow: {
     flexDirection: "row",
