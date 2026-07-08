@@ -15,6 +15,11 @@ export interface Session {
   course?: string; // e.g. "CHEM 101"
   isFavorite?: boolean;
   contents?: Record<string, string>; // Maps templateId -> generated content
+  audioUri?: string;
+  isFailed?: boolean;
+  rawTranscript?: string;
+  photoUris?: string[];
+  photoTexts?: string[];
 }
 
 export async function saveSessions(sessions: Session[]): Promise<void> {

@@ -7,6 +7,7 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme
 import { transcribeAudio, summarize } from "@/lib/api";
 import { addSession } from "@/lib/storage";
 import WaveformAnimation from "@/components/WaveformAnimation";
+import * as FileSystem from "expo-file-system/legacy";
 
 type StepStatus = "pending" | "running" | "done" | "error" | "skipped";
 
@@ -74,16 +75,39 @@ export default function ProcessingScreen() {
 
     setSteps(initialSteps);
 
+    let permanentAudioUri = "";
+    let audioTranscript = "";
+
+    // 0. Copy audio file to permanent storage immediately to prevent loss
+    if (audioUri) {
+      try {
+        const audioDir = `${FileSystem.documentDirectory}audio/`;
+        const dirInfo = await FileSystem.getInfoAsync(audioDir);
+        if (!dirInfo.exists) {
+          await FileSystem.makeDirectoryAsync(audioDir, { intermediates: true });
+        }
+        const destUri = `${audioDir}${Date.now()}.m4a`;
+        await FileSystem.copyAsync({
+          from: audioUri,
+          to: destUri,
+        });
+        permanentAudioUri = destUri;
+        console.log(`[Audio Preserved] Saved audio file to: ${permanentAudioUri}`);
+      } catch (err) {
+        console.error("Failed to copy audio file to permanent storage:", err);
+        permanentAudioUri = audioUri; // fallback
+      }
+    }
+
     try {
       // 1. Transcribe audio
-      let audioTranscript = "";
-      if (audioUri) {
+      if (permanentAudioUri) {
         updateStep("audio", "running");
-        audioTranscript = await transcribeAudio(audioUri);
+        audioTranscript = await transcribeAudio(permanentAudioUri);
         updateStep("audio", "done", "Lecture transcribed ✓");
       }
 
-      // 2. Photo texts (already extracted in background during session)
+      // 2. Photo texts
       const photoTexts = existingPhotoTexts;
 
       // 3. Combine
@@ -127,6 +151,11 @@ export default function ProcessingScreen() {
         contents: {
           [templateId]: content,
         },
+        audioUri: permanentAudioUri,
+        rawTranscript: audioTranscript,
+        photoUris,
+        photoTexts,
+        isFailed: false,
       };
       await addSession(session);
       updateStep("save", "done", "Session saved ✓");
@@ -142,12 +171,37 @@ export default function ProcessingScreen() {
       console.error("[Processing Pipeline Error] Step failed:", {
         message: err instanceof Error ? err.message : String(err),
         error: err,
-        stack: err instanceof Error ? err.stack : undefined,
       });
+
+      // Save a failed session draft so they do not lose their audio/transcript!
+      try {
+        const failedSession = {
+          id: Date.now().toString(),
+          title: params.course ? `${params.course} (Failed Draft)` : "Failed Session Draft",
+          date: new Date().toISOString(),
+          durationSeconds,
+          photoCount: photoUris.length,
+          templateId,
+          content: "⚠️ AI Generation failed. Please check your internet connection and tap 'Retry' below to try again.",
+          course: params.course || "General",
+          contents: {},
+          audioUri: permanentAudioUri,
+          rawTranscript: audioTranscript,
+          photoUris,
+          photoTexts: existingPhotoTexts,
+          isFailed: true,
+        };
+        await addSession(failedSession);
+      } catch (saveErr) {
+        console.error("Failed to save recovery session:", saveErr);
+      }
+
       const msg = err instanceof Error ? err.message : "Something went wrong.";
-      Alert.alert("Generation Failed", msg, [
-        { text: "Go Back", onPress: () => router.replace("/") },
-      ]);
+      Alert.alert(
+        "Generation Failed",
+        `${msg}\n\nWe have safely saved your recording. You can retry compiling it from your history list.`,
+        [{ text: "OK", onPress: () => router.replace("/") }]
+      );
     }
   };
 

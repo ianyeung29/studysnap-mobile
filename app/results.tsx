@@ -22,7 +22,7 @@ import { loadSessions, Session, addSession, formatDate, formatDuration } from "@
 import * as Speech from "expo-speech";
 import * as FileSystem from "expo-file-system/legacy";
 import { TEMPLATES, TemplateId } from "@/lib/templates";
-import { summarize } from "@/lib/api";
+import { summarize, transcribeAudio } from "@/lib/api";
 
 export default function ResultsScreen() {
   const router = useRouter();
@@ -46,6 +46,73 @@ export default function ResultsScreen() {
   const [isFlipped, setIsFlipped] = useState(false);
 
   // Stop speech on unmount
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  const handleRetryGeneration = async () => {
+    if (!session || isRetrying) return;
+    setIsRetrying(true);
+
+    try {
+      let audioTranscript = session.rawTranscript || "";
+
+      // 1. If transcription failed earlier, perform it now using the permanently saved audio!
+      if (!audioTranscript && session.audioUri) {
+        audioTranscript = await transcribeAudio(session.audioUri);
+      }
+
+      // 2. Combine inputs
+      const parts: string[] = [];
+      if (audioTranscript) {
+        parts.push(`=== LECTURE AUDIO TRANSCRIPT ===\n${audioTranscript}`);
+      }
+
+      if (session.photoTexts) {
+        session.photoTexts.forEach((text, i) => {
+          if (text.trim()) {
+            parts.push(`=== WHITEBOARD/NOTES (Photo ${i + 1}) ===\n${text}`);
+          }
+        });
+      }
+
+      const combinedNotes = parts.join("\n\n");
+      if (!combinedNotes.trim()) {
+        throw new Error("No notes content found to compile.");
+      }
+
+      // 3. Summarize
+      const { title, content, course: autoCourse } = await summarize(
+        combinedNotes,
+        session.templateId || "study-guide"
+      );
+
+      // 4. Save success
+      const updatedSession = {
+        ...session,
+        title,
+        content,
+        isFailed: false,
+        rawTranscript: audioTranscript,
+        contents: {
+          [session.templateId || "study-guide"]: content,
+        },
+      };
+
+      const sessions = await loadSessions();
+      const updatedSessions = sessions.map((s: Session) => (s.id === session.id ? updatedSession : s));
+      const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+      await AsyncStorage.setItem("studysnap_sessions", JSON.stringify(updatedSessions));
+
+      setSession(updatedSession);
+      setEditableContent(content);
+      Alert.alert("Success", "Study materials compiled successfully!");
+    } catch (err: unknown) {
+      console.error("[Retry Generation Error]:", err);
+      const msg = err instanceof Error ? err.message : "Connection failed.";
+      Alert.alert("Generation Failed", `Could not compile notes: ${msg}`);
+    } finally {
+      setIsRetrying(false);
+    }
+  };
   useEffect(() => {
     return () => {
       Speech.stop();
@@ -426,122 +493,149 @@ export default function ResultsScreen() {
           </Text>
         </View>
 
-        {/* Action bar for Editing */}
-        <View style={styles.editBar}>
-          <Text style={styles.editHint}>
-            {isEditing
-              ? "✍️ Editing mode active. Don't forget to save."
-              : "✏️ You can edit the output below before exporting."}
-          </Text>
-          {isEditing ? (
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-              <Text style={styles.saveBtnText}>Save</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.editActionsRow}>
+        {session.isFailed ? (
+          <View style={styles.failedCard}>
+            <Text style={styles.failedIcon}>⚠️</Text>
+            <Text style={styles.failedTitle}>AI Generation Failed</Text>
+            <Text style={styles.failedDesc}>
+              We have safely saved your class lecture recording and notes on this device. However, we couldn't connect to the AI engine to generate the study materials.
+            </Text>
+
+            {isRetrying ? (
+              <View style={styles.retryLoaderRow}>
+                <ActivityIndicator color={Colors.accent2} size="small" />
+                <Text style={styles.retryLoaderText}>Compiling study guide...</Text>
+              </View>
+            ) : (
               <TouchableOpacity
-                style={styles.explainBtn}
+                style={styles.retryBtn}
+                onPress={handleRetryGeneration}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.retryBtnText}>🔄 Retry AI Generation</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <>
+            {/* Action bar for Editing */}
+            <View style={styles.editBar}>
+              <Text style={styles.editHint}>
+                {isEditing
+                  ? "✍️ Editing mode active. Don't forget to save."
+                  : "✏️ You can edit the output below before exporting."}
+              </Text>
+              {isEditing ? (
+                <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                  <Text style={styles.saveBtnText}>Save</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.editActionsRow}>
+                  <TouchableOpacity
+                    style={styles.explainBtn}
+                    onPress={() => {
+                      setExplainModalVisible(true);
+                      setConceptToExplain("");
+                      setExplanationResult("");
+                    }}
+                  >
+                    <Text style={styles.explainBtnText}>💡 ELI5</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.editBtn} onPress={() => setIsEditing(true)}>
+                    <Text style={styles.editBtnText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {/* Content Box */}
+            {session.templateId === "flashcards" && (
+              <TouchableOpacity
+                style={styles.playCardsBtn}
                 onPress={() => {
-                  setExplainModalVisible(true);
-                  setConceptToExplain("");
-                  setExplanationResult("");
+                  setCardPlayerVisible(true);
+                  setCurrentCardIndex(0);
+                  setIsFlipped(false);
                 }}
               >
-                <Text style={styles.explainBtnText}>💡 ELI5</Text>
+                <Text style={styles.playCardsBtnText}>⚡ Start Study Practice Mode</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.editBtn} onPress={() => setIsEditing(true)}>
-                <Text style={styles.editBtnText}>Edit</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
+            )}
 
-        {/* Content Box */}
-        {session.templateId === "flashcards" && (
-          <TouchableOpacity
-            style={styles.playCardsBtn}
-            onPress={() => {
-              setCardPlayerVisible(true);
-              setCurrentCardIndex(0);
-              setIsFlipped(false);
-            }}
-          >
-            <Text style={styles.playCardsBtnText}>⚡ Start Study Practice Mode</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Content Box */}
-        {isEditing ? (
-          <TextInput
-            style={[styles.textarea, styles.contentArea]}
-            value={editableContent}
-            onChangeText={setEditableContent}
-            multiline
-            textAlignVertical="top"
-          />
-        ) : (
-          <View style={styles.contentCard}>
-            <ScrollView style={styles.readOnlyScroll} nestedScrollEnabled>
-              <Text style={styles.contentText}>{editableContent}</Text>
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Export Buttons */}
-        <View style={styles.exportBar}>
-          <TouchableOpacity
-            style={[styles.exportBtn, copied && styles.exportBtnSuccess]}
-            onPress={handleCopy}
-            id="copy-to-clipboard-btn"
-          >
-            <Text style={styles.exportBtnText}>
-              {copied ? "✅ Copied" : "📋 Copy"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.exportBtn} onPress={handleShare} id="native-share-btn">
-            <Text style={styles.exportBtnText}>📤 Share</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.exportBtn} onPress={handleExportPDF} id="export-pdf-btn">
-            <Text style={styles.exportBtnText}>📄 PDF</Text>
-          </TouchableOpacity>
-
-          {session.templateId === "flashcards" && (
-            <TouchableOpacity style={styles.exportBtn} onPress={handleExportAnki} id="export-anki-btn">
-              <Text style={styles.exportBtnText}>🃏 Anki</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Converter / Regenerator Options */}
-        <View style={styles.convertPanel}>
-          <Text style={styles.convertTitle}>🔄 Convert format to:</Text>
-          {regenerating ? (
-            <ActivityIndicator color={Colors.accent2} style={{ marginVertical: Spacing.md }} />
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.convertRow}>
-                {(Object.entries(TEMPLATES) as [TemplateId, typeof TEMPLATES[TemplateId]][]).map(
-                  ([id, tmpl]) => {
-                    if (id === session.templateId) return null;
-                    return (
-                      <TouchableOpacity
-                        key={id}
-                        style={styles.convertChip}
-                        onPress={() => handleRegenerate(id)}
-                        id={`convert-to-${id}-btn`}
-                      >
-                        <Text style={styles.convertChipIcon}>{tmpl.icon}</Text>
-                        <Text style={styles.convertChipLabel}>{tmpl.label}</Text>
-                      </TouchableOpacity>
-                    );
-                  }
-                )}
+            {/* Content Box */}
+            {isEditing ? (
+              <TextInput
+                style={[styles.textarea, styles.contentArea]}
+                value={editableContent}
+                onChangeText={setEditableContent}
+                multiline
+                textAlignVertical="top"
+              />
+            ) : (
+              <View style={styles.contentCard}>
+                <ScrollView style={styles.readOnlyScroll} nestedScrollEnabled>
+                  <Text style={styles.contentText}>{editableContent}</Text>
+                </ScrollView>
               </View>
-            </ScrollView>
-          )}
-        </View>
+            )}
+
+            {/* Export Buttons */}
+            <View style={styles.exportBar}>
+              <TouchableOpacity
+                style={[styles.exportBtn, copied && styles.exportBtnSuccess]}
+                onPress={handleCopy}
+                id="copy-to-clipboard-btn"
+              >
+                <Text style={styles.exportBtnText}>
+                  {copied ? "✅ Copied" : "📋 Copy"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.exportBtn} onPress={handleShare} id="native-share-btn">
+                <Text style={styles.exportBtnText}>📤 Share</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.exportBtn} onPress={handleExportPDF} id="export-pdf-btn">
+                <Text style={styles.exportBtnText}>📄 PDF</Text>
+              </TouchableOpacity>
+
+              {session.templateId === "flashcards" && (
+                <TouchableOpacity style={styles.exportBtn} onPress={handleExportAnki} id="export-anki-btn">
+                  <Text style={styles.exportBtnText}>🃏 Anki</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Converter / Regenerator Options */}
+            <View style={styles.convertPanel}>
+              <Text style={styles.convertTitle}>🔄 Convert format to:</Text>
+              {regenerating ? (
+                <ActivityIndicator color={Colors.accent2} style={{ marginVertical: Spacing.md }} />
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.convertRow}>
+                    {(Object.entries(TEMPLATES) as [TemplateId, typeof TEMPLATES[TemplateId]][]).map(
+                      ([id, tmpl]) => {
+                        if (id === session.templateId) return null;
+                        return (
+                          <TouchableOpacity
+                            key={id}
+                            style={styles.convertChip}
+                            onPress={() => handleRegenerate(id)}
+                            id={`convert-to-${id}-btn`}
+                          >
+                            <Text style={styles.convertChipIcon}>{tmpl.icon}</Text>
+                            <Text style={styles.convertChipLabel}>{tmpl.label}</Text>
+                          </TouchableOpacity>
+                        );
+                      }
+                    )}
+                  </View>
+                </ScrollView>
+              )}
+            </View>
+          </>
+        )}
       </ScrollView>
 
       {/* ELI5 Explanation Modal */}
@@ -1099,5 +1193,57 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: Colors.accent3,
     borderRadius: Radius.full,
+  },
+
+  // Recovery / Failed Draft styles
+  failedCard: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.25)", // red border
+    padding: Spacing.xl,
+    alignItems: "center",
+    gap: Spacing.md,
+    marginVertical: Spacing.md,
+  },
+  failedIcon: {
+    fontSize: 48,
+    color: Colors.error,
+  },
+  failedTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  failedDesc: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 20,
+    paddingHorizontal: Spacing.sm,
+  },
+  retryBtn: {
+    backgroundColor: Colors.accent1,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    marginTop: Spacing.md,
+    width: "100%",
+    alignItems: "center",
+  },
+  retryBtnText: {
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.sm,
+  },
+  retryLoaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  retryLoaderText: {
+    color: Colors.textSecondary,
+    fontSize: FontSize.sm,
   },
 });
