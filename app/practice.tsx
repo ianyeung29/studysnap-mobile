@@ -43,7 +43,7 @@ export default function PracticeScreen() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>🧠 Practice Hub</Text>
+          <Text style={styles.title}>Practice</Text>
           <Text style={styles.subtitle}>Test your active recall with flashcards and interactive quizzes</Text>
         </View>
 
@@ -118,7 +118,7 @@ export default function PracticeScreen() {
 
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>
-                      {itemsCount} {isFlashcard ? "cards" : "questions"}
+                      {itemsCount} {isFlashcard ? (itemsCount === 1 ? "card" : "cards") : (itemsCount === 1 ? "question" : "questions")}
                     </Text>
                   </View>
                   <Text style={styles.cardArrow}>›</Text>
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: Platform.OS === "ios" ? 100 : 86, // leave room for BottomNav
+    paddingBottom: 110, // leave room for BottomNav
   },
   emptyCard: {
     backgroundColor: Colors.bgCard,

@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   },
 
   // List styles
-  listContent: { padding: Spacing.lg, paddingBottom: Spacing["3xl"] },
+  listContent: { padding: Spacing.lg, paddingBottom: 110 },
 
   cardContainer: {
     flexDirection: "row",

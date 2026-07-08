@@ -53,7 +53,7 @@ export default function SearchScreen() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>🔍 Global Search</Text>
+          <Text style={styles.title}>Search</Text>
           <Text style={styles.subtitle}>Search titles, courses, transcripts, and study guides</Text>
         </View>
 
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: Platform.OS === "ios" ? 100 : 86, // leave room for BottomNav
+    paddingBottom: 110, // leave room for BottomNav
   },
   emptyCard: {
     backgroundColor: Colors.bgCard,
