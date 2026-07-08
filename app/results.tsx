@@ -1639,21 +1639,21 @@ const styles = StyleSheet.create({
   templateLabel: { fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.bold, letterSpacing: 1, textTransform: "uppercase" },
   title: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, flexWrap: "wrap" },
   favoriteBtn: {
-    padding: 8,
+    padding: 6,
     borderRadius: Radius.sm,
     backgroundColor: "rgba(255,255,255,0.05)",
   },
   favoriteBtnIcon: {
-    fontSize: 22,
+    fontSize: 16,
     color: Colors.accent3,
   },
   ttsBtn: {
-    padding: 8,
+    padding: 6,
     borderRadius: Radius.sm,
     backgroundColor: "rgba(255,255,255,0.05)",
   },
   ttsBtnIcon: {
-    fontSize: 22,
+    fontSize: 16,
     color: Colors.textPrimary,
   },
   meta: { fontSize: FontSize.xs, color: Colors.textMuted },
