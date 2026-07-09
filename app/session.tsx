@@ -162,30 +162,29 @@ export default function SessionScreen() {
     });
 
     if (result.canceled || !result.assets[0]) return;
-
+ 
     const uri = result.assets[0].uri;
     const newPhoto: PhotoItem = { uri, processing: true };
     setPhotos((prev) => [...prev, newPhoto]);
-    const idx = photos.length;
-
+ 
     // Extract text in background
     extractImageText(uri)
       .then((text: string) => {
         setPhotos((prev) =>
-          prev.map((p, i) =>
-            i === idx ? { ...p, extractedText: text, processing: false } : p
+          prev.map((p) =>
+            p.uri === uri ? { ...p, extractedText: text, processing: false } : p
           )
         );
       })
       .catch(() => {
         setPhotos((prev) =>
-          prev.map((p, i) =>
-            i === idx ? { ...p, processing: false, error: "Failed to read photo" } : p
+          prev.map((p) =>
+            p.uri === uri ? { ...p, processing: false, error: "Failed to read photo" } : p
           )
         );
       });
-  }, [photos.length]);
-
+  }, []);
+ 
   // ── Pick from library ───────────────────────────────────────
   const handlePickPhoto = useCallback(async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -193,31 +192,30 @@ export default function SessionScreen() {
       quality: 0.85,
       allowsMultipleSelection: true,
     });
-
+ 
     if (result.canceled) return;
-
+ 
     for (const asset of result.assets) {
       const uri = asset.uri;
-      const idx = photos.length;
       setPhotos((prev) => [...prev, { uri, processing: true }]);
-
+ 
       extractImageText(uri)
         .then((text: string) => {
           setPhotos((prev) =>
-            prev.map((p, i) =>
-              i === idx ? { ...p, extractedText: text, processing: false } : p
+            prev.map((p) =>
+              p.uri === uri ? { ...p, extractedText: text, processing: false } : p
             )
           );
         })
         .catch(() => {
           setPhotos((prev) =>
-            prev.map((p, i) =>
-              i === idx ? { ...p, processing: false, error: "Failed" } : p
+            prev.map((p) =>
+              p.uri === uri ? { ...p, processing: false, error: "Failed to read photo" } : p
             )
           );
         });
     }
-  }, [photos.length]);
+  }, []);
 
   const handleDeletePhoto = (index: number) => {
     setPhotos((prev) => prev.filter((_, i) => i !== index));

@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
 
 interface BottomNavProps {
@@ -27,7 +28,12 @@ export default function BottomNav({ currentTab }: BottomNavProps) {
         activeOpacity={0.7}
         onPress={() => router.replace("/")}
       >
-        <Text style={[styles.navIcon, currentTab === "home" && styles.navIconActive]}>🏠</Text>
+        <Feather
+          name="home"
+          size={20}
+          color={currentTab === "home" ? Colors.accent3 : "#8B8A99"}
+          style={styles.navIcon}
+        />
         <Text style={[styles.navLabel, currentTab === "home" && styles.navLabelActive]}>Home</Text>
       </TouchableOpacity>
 
@@ -37,7 +43,12 @@ export default function BottomNav({ currentTab }: BottomNavProps) {
         activeOpacity={0.7}
         onPress={() => router.replace("/library")}
       >
-        <Text style={[styles.navIcon, currentTab === "library" && styles.navIconActive]}>📁</Text>
+        <Feather
+          name="folder"
+          size={20}
+          color={currentTab === "library" ? Colors.accent3 : "#8B8A99"}
+          style={styles.navIcon}
+        />
         <Text style={[styles.navLabel, currentTab === "library" && styles.navLabelActive]}>Library</Text>
       </TouchableOpacity>
 
@@ -50,7 +61,12 @@ export default function BottomNav({ currentTab }: BottomNavProps) {
         activeOpacity={0.7}
         onPress={() => router.replace("/search")}
       >
-        <Text style={[styles.navIcon, currentTab === "search" && styles.navIconActive]}>🔍</Text>
+        <Feather
+          name="search"
+          size={20}
+          color={currentTab === "search" ? Colors.accent3 : "#8B8A99"}
+          style={styles.navIcon}
+        />
         <Text style={[styles.navLabel, currentTab === "search" && styles.navLabelActive]}>Search</Text>
       </TouchableOpacity>
 
@@ -60,7 +76,12 @@ export default function BottomNav({ currentTab }: BottomNavProps) {
         activeOpacity={0.7}
         onPress={() => router.replace("/practice")}
       >
-        <Text style={[styles.navIcon, currentTab === "practice" && styles.navIconActive]}>🧠</Text>
+        <Feather
+          name="book-open"
+          size={20}
+          color={currentTab === "practice" ? Colors.accent3 : "#8B8A99"}
+          style={styles.navIcon}
+        />
         <Text style={[styles.navLabel, currentTab === "practice" && styles.navLabelActive]}>Practice</Text>
       </TouchableOpacity>
 
@@ -71,7 +92,7 @@ export default function BottomNav({ currentTab }: BottomNavProps) {
           activeOpacity={0.85}
           onPress={() => router.push("/session")}
         >
-          <Text style={styles.recordButtonIcon}>🎙️</Text>
+          <Feather name="mic" size={24} color={Colors.white} />
         </TouchableOpacity>
       </View>
     </View>
@@ -103,22 +124,16 @@ const styles = StyleSheet.create({
     width: 68, // leaves a perfect gap for the absolute record button
   },
   navIcon: {
-    fontSize: 20,
-    color: Colors.textMuted,
-    opacity: 0.6,
-  },
-  navIconActive: {
-    color: Colors.accent3, // purple active accent
-    opacity: 1,
+    marginBottom: 2,
   },
   navLabel: {
     fontSize: 10,
     fontWeight: FontWeight.semibold,
-    color: Colors.textMuted,
-    marginTop: 4,
+    color: "#8B8A99", // high contrast inactive color for accessibility
+    marginTop: 2,
   },
   navLabelActive: {
-    color: Colors.textPrimary,
+    color: Colors.accent3, // active purple label
   },
   recordContainer: {
     position: "absolute",
@@ -144,10 +159,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 8,
-  },
-  recordButtonIcon: {
-    fontSize: 24,
-    color: Colors.white,
-    marginLeft: 1,
   },
 });
