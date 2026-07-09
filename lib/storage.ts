@@ -4,6 +4,29 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const SESSIONS_KEY = "studysnap_sessions";
 
+export type HighlightType = "term" | "definition" | "formula" | "exam" | "warning";
+
+export interface Highlight {
+  text: string;
+  type: HighlightType;
+  importance: 1 | 2 | 3;
+  sourceTimestamp?: number;
+  reason?: string;
+}
+
+export interface GeneratedArtifact {
+  id: string;
+  sessionId: string;
+  format: string; // e.g. "study-guide" | "flashcards" | "quiz" | "exam-prep"
+  content: string;
+  sourceHash: string; // Hash of source materials (notes, photos, etc.)
+  model: string;
+  promptVersion: number;
+  generatedAt: string;
+  userEdited: boolean;
+  highlights?: Highlight[];
+}
+
 export interface Session {
   id: string;
   title: string;
@@ -23,6 +46,25 @@ export interface Session {
   photoTexts?: string[];
   isMasterGuide?: boolean;
   extraNotes?: string;
+  
+  // Offline caching & version control
+  artifacts?: GeneratedArtifact[];
+  activeArtifactIds?: Record<string, string>; // Maps format -> active artifact ID
+}
+
+export function computeSourceHash(session: Session): string {
+  const transcript = session.rawTranscript || "";
+  const notes = session.extraNotes || "";
+  const photos = session.photoUris ? session.photoUris.join(",") : "";
+  const combined = `${transcript}|${notes}|${photos}`;
+  
+  let hash = 0;
+  for (let i = 0; i < combined.length; i++) {
+    const char = combined.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return hash.toString(16);
 }
 
 export async function saveSessions(sessions: Session[]): Promise<void> {

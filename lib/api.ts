@@ -1,5 +1,6 @@
 // lib/api.ts — All calls to the Next.js backend with detailed logging and file system checks
 import * as FileSystem from "expo-file-system/legacy";
+import { Highlight } from "./storage";
 
 // ─── CONFIG ──────────────────────────────────────────────────
 // During development: set this to your computer's local IP
@@ -118,7 +119,7 @@ export async function summarize(
   notes: string,
   templateId: string,
   isMaster: boolean = false
-): Promise<{ title: string; content: string; course?: string }> {
+): Promise<{ title: string; content: string; course?: string; highlights?: Highlight[] }> {
   const res = await loggedFetch(`${API_BASE_URL}/api/summarize`, {
     method: "POST",
     headers: {
@@ -138,6 +139,7 @@ export async function summarize(
     title: data.title ?? "Untitled",
     content: data.content ?? "",
     course: data.course,
+    highlights: data.highlights || [],
   };
 }
 

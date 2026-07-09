@@ -1,42 +1,124 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { Colors, Spacing, FontSize, FontWeight } from "@/constants/theme";
+import { Colors, Spacing, FontSize, FontWeight, Radius } from "@/constants/theme";
+import { Highlight } from "../lib/storage";
 
 interface MarkdownTextProps {
   text: string;
+  highlights?: Highlight[];
+  focusMode?: boolean;
+  onHighlightPress?: (highlight: Highlight) => void;
 }
 
-export default function MarkdownText({ text }: MarkdownTextProps) {
+export default function MarkdownText({
+  text,
+  highlights = [],
+  focusMode = false,
+  onHighlightPress,
+}: MarkdownTextProps) {
   if (!text) return null;
 
-  // Split by line
-  const lines = text.split("\n");
+  const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-  const parseInlineBold = (inputText: string) => {
-    // Split by **
-    const parts = inputText.split("**");
-    return parts.map((part, i) => {
-      // Alternate elements are bolded
-      const isBold = i % 2 !== 0;
+  const renderTextWithHighlights = (inputText: string, parentIsBold: boolean, parentIndex: number) => {
+    if (!highlights || highlights.length === 0) {
       return (
-        <Text key={i} style={isBold ? styles.boldText : null}>
-          {part}
+        <Text
+          key={parentIndex}
+          style={[
+            parentIsBold ? styles.boldText : null,
+            focusMode ? { opacity: 0.25 } : null
+          ]}
+        >
+          {inputText}
         </Text>
       );
+    }
+
+    const activeHighlights = [...highlights].sort((a, b) => b.text.length - a.text.length);
+    const phrases = activeHighlights.map(h => h.text).filter(Boolean);
+    if (phrases.length === 0) {
+      return (
+        <Text
+          key={parentIndex}
+          style={[
+            parentIsBold ? styles.boldText : null,
+            focusMode ? { opacity: 0.25 } : null
+          ]}
+        >
+          {inputText}
+        </Text>
+      );
+    }
+
+    const regex = new RegExp(`(${phrases.map(escapeRegExp).join("|")})`, "gi");
+    const parts = inputText.split(regex);
+
+    return (
+      <Text key={parentIndex}>
+        {parts.map((part, i) => {
+          const isMatch = i % 2 !== 0;
+          if (isMatch) {
+            const hl = activeHighlights.find(h => h.text.toLowerCase() === part.toLowerCase());
+            if (hl) {
+              let highlightStyle: any[] = [styles.highlightBase];
+              if (hl.type === "warning") {
+                highlightStyle.push(styles.highlightWarning);
+              } else if (hl.importance === 3) {
+                highlightStyle.push(styles.highlightHigh);
+              } else if (hl.importance === 2) {
+                highlightStyle.push(styles.highlightMedium);
+              } else {
+                highlightStyle.push(styles.highlightLow);
+              }
+
+              return (
+                <Text
+                  key={i}
+                  style={[highlightStyle, parentIsBold ? styles.boldText : null]}
+                  onPress={() => onHighlightPress?.(hl)}
+                >
+                  {part}
+                </Text>
+              );
+            }
+          }
+
+          return (
+            <Text
+              key={i}
+              style={[
+                parentIsBold ? styles.boldText : null,
+                focusMode ? { opacity: 0.25 } : null
+              ]}
+            >
+              {part}
+            </Text>
+          );
+        })}
+      </Text>
+    );
+  };
+
+  const parseInlineBold = (inputText: string) => {
+    const parts = inputText.split("**");
+    return parts.map((part, i) => {
+      const isBold = i % 2 !== 0;
+      return renderTextWithHighlights(part, isBold, i);
     });
   };
+
+  const lines = text.split("\n");
 
   return (
     <View style={styles.container}>
       {lines.map((line, index) => {
         const trimmed = line.trim();
 
-        // 1. Empty lines
         if (trimmed === "") {
           return <View key={index} style={styles.spacing} />;
         }
 
-        // 2. Heading 2 (##)
         if (trimmed.startsWith("## ")) {
           const content = trimmed.substring(3).trim();
           return (
@@ -46,7 +128,6 @@ export default function MarkdownText({ text }: MarkdownTextProps) {
           );
         }
 
-        // 3. Heading 3 (###)
         if (trimmed.startsWith("### ")) {
           const content = trimmed.substring(4).trim();
           return (
@@ -56,7 +137,6 @@ export default function MarkdownText({ text }: MarkdownTextProps) {
           );
         }
 
-        // 4. Bullet lists (- )
         if (trimmed.startsWith("- ")) {
           const content = trimmed.substring(2).trim();
           return (
@@ -67,12 +147,10 @@ export default function MarkdownText({ text }: MarkdownTextProps) {
           );
         }
 
-        // 5. Divider (---)
         if (trimmed === "---") {
           return <View key={index} style={styles.divider} />;
         }
 
-        // 6. Plain paragraph text
         return (
           <Text key={index} style={styles.paragraph}>
             {parseInlineBold(line)}
@@ -93,7 +171,7 @@ const styles = StyleSheet.create({
   h2: {
     fontSize: FontSize.md,
     fontWeight: FontWeight.bold,
-    color: Colors.accent3, // purple accent color
+    color: Colors.accent3,
     marginTop: Spacing.md,
     marginBottom: Spacing.xs,
     lineHeight: 22,
@@ -133,10 +211,30 @@ const styles = StyleSheet.create({
   },
   boldText: {
     fontWeight: FontWeight.bold,
-    color: Colors.accent3, // High-contrast bright purple key terms
-    backgroundColor: "rgba(192, 132, 252, 0.12)", // Soft neon marker highlight effect
-    paddingHorizontal: 4,
+    color: Colors.textPrimary,
+  },
+  highlightBase: {
     borderRadius: 4,
+    paddingHorizontal: 2,
+  },
+  highlightWarning: {
+    backgroundColor: "rgba(239, 68, 68, 0.2)",
+    color: "#ff8888",
+    fontWeight: FontWeight.bold,
+  },
+  highlightHigh: {
+    backgroundColor: "rgba(245, 158, 11, 0.25)",
+    color: "#f59e0b",
+    fontWeight: FontWeight.bold,
+  },
+  highlightMedium: {
+    backgroundColor: "rgba(192, 132, 252, 0.2)",
+    color: Colors.accent3,
+    fontWeight: FontWeight.bold,
+  },
+  highlightLow: {
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    color: Colors.textPrimary,
   },
   divider: {
     height: 1,

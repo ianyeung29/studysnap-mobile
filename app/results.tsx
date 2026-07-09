@@ -18,7 +18,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import * as Clipboard from "expo-clipboard";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
-import { loadSessions, Session, addSession, formatDate, formatDuration } from "@/lib/storage";
+import { loadSessions, Session, addSession, formatDate, formatDuration, computeSourceHash, Highlight, HighlightType, GeneratedArtifact } from "@/lib/storage";
 import * as Speech from "expo-speech";
 import * as FileSystem from "expo-file-system/legacy";
 import { TEMPLATES, TemplateId } from "@/lib/templates";
@@ -39,6 +39,16 @@ export default function ResultsScreen() {
   const [regenerating, setRegenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // Highlights & Version Control States
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [focusMode, setFocusMode] = useState(false);
+  const [sourceChanged, setSourceChanged] = useState(false);
+  const [activeArtifact, setActiveArtifact] = useState<GeneratedArtifact | null>(null);
+  const [addHighlightModalVisible, setAddHighlightModalVisible] = useState(false);
+  const [newHighlightText, setNewHighlightText] = useState("");
+  const [newHighlightType, setNewHighlightType] = useState<HighlightType>("term");
+  const [newHighlightImportance, setNewHighlightImportance] = useState<1 | 2 | 3>(2);
 
   // Teach Me Mode (AI Tutor) States
   const [explainModalVisible, setExplainModalVisible] = useState(false);
@@ -225,23 +235,67 @@ export default function ResultsScreen() {
     };
   }, []);
 
+  const loadSessionData = useCallback(async (found: Session, targetTemplateId: string) => {
+    const currentHash = computeSourceHash(found);
+    const activeId = found.activeArtifactIds?.[targetTemplateId];
+    const artifact = found.artifacts?.find(a => a.id === activeId);
+
+    if (artifact) {
+      setActiveArtifact(artifact);
+      setEditableContent(artifact.content);
+      setHighlights(artifact.highlights || []);
+      setSourceChanged(artifact.sourceHash !== currentHash);
+    } else {
+      const artifactId = Math.random().toString(36).substring(7);
+      const newArt: GeneratedArtifact = {
+        id: artifactId,
+        sessionId: found.id,
+        format: targetTemplateId,
+        content: found.content || "",
+        sourceHash: currentHash,
+        model: "gpt-4o-mini",
+        promptVersion: 1,
+        generatedAt: new Date().toISOString(),
+        userEdited: false,
+        highlights: [],
+      };
+      
+      const updatedSession = {
+        ...found,
+        artifacts: [...(found.artifacts || []), newArt],
+        activeArtifactIds: { ...(found.activeArtifactIds || {}), [targetTemplateId]: artifactId }
+      };
+
+      const sessions = await loadSessions();
+      const updatedSessions = sessions.map((s: Session) => (s.id === found.id ? updatedSession : s));
+      const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+      await AsyncStorage.setItem("studysnap_sessions", JSON.stringify(updatedSessions));
+
+      setSession(updatedSession);
+      setActiveArtifact(newArt);
+      setEditableContent(newArt.content);
+      setHighlights([]);
+      setSourceChanged(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (params.sessionId) {
       loadSessions().then((sessions: Session[]) => {
         const found = sessions.find((s: Session) => s.id === params.sessionId);
         if (found) {
           setSession(found);
-          setEditableContent(found.content);
           setEditableTitle(found.title);
           setEditableCourse(found.course || "General");
           setEditableParentFolder(found.parentFolder || "General Folders");
+          loadSessionData(found, found.templateId);
         }
       });
       subscriptionService.getEntitlement().then((entitlement) => {
         setIsPremium(entitlement.isActive);
       });
     }
-  }, [params.sessionId]);
+  }, [params.sessionId, loadSessionData]);
 
   const handleCopy = useCallback(async () => {
     if (!editableContent) return;
@@ -444,16 +498,18 @@ export default function ResultsScreen() {
   }, [session, editableContent]);
 
   const handleRegenerate = useCallback(
-    async (newTemplateId: TemplateId) => {
+    async (newTemplateId: TemplateId, forceRegenerate: boolean = false) => {
       if (!session || regenerating) return;
 
-      // Check if this format was already generated before and cached
-      const cachedContent = session.contents?.[newTemplateId];
-      if (cachedContent) {
+      const currentHash = computeSourceHash(session);
+      const activeId = session.activeArtifactIds?.[newTemplateId];
+      const cachedArt = session.artifacts?.find(a => a.id === activeId);
+
+      if (cachedArt && !forceRegenerate) {
         const updatedSession = {
           ...session,
           templateId: newTemplateId,
-          content: cachedContent,
+          content: cachedArt.content,
         };
 
         const sessions = await loadSessions();
@@ -462,22 +518,38 @@ export default function ResultsScreen() {
         await AsyncStorage.setItem("studysnap_sessions", JSON.stringify(updatedSessions));
 
         setSession(updatedSession);
-        setEditableContent(cachedContent);
+        setActiveArtifact(cachedArt);
+        setEditableContent(cachedArt.content);
         setEditableTitle(updatedSession.title);
         setEditableCourse(updatedSession.course || "General");
         setEditableParentFolder(updatedSession.parentFolder || "General Folders");
+        setHighlights(cachedArt.highlights || []);
+        setSourceChanged(cachedArt.sourceHash !== currentHash);
         return;
       }
 
       setRegenerating(true);
 
       try {
-        // Use the original study-guide or the current content as reference for translation
-        const referenceContent = session.contents?.["study-guide"] || editableContent;
-        const { title, content } = await summarize(
+        const referenceContent = session.artifacts?.find(a => a.format === "study-guide")?.content || editableContent;
+        const { title, content, highlights: aiHls } = await summarize(
           `Convert this current study material into the requested format: ${newTemplateId}\n\n${referenceContent}`,
           newTemplateId
         );
+
+        const artifactId = Math.random().toString(36).substring(7);
+        const newArt: GeneratedArtifact = {
+          id: artifactId,
+          sessionId: session.id,
+          format: newTemplateId,
+          content,
+          sourceHash: currentHash,
+          model: "gpt-4o-mini",
+          promptVersion: 1,
+          generatedAt: new Date().toISOString(),
+          userEdited: false,
+          highlights: aiHls || [],
+        };
 
         const updatedSession = {
           ...session,
@@ -488,6 +560,8 @@ export default function ResultsScreen() {
             ...(session.contents || { [session.templateId]: editableContent }),
             [newTemplateId]: content,
           },
+          artifacts: [...(session.artifacts || []), newArt],
+          activeArtifactIds: { ...(session.activeArtifactIds || {}), [newTemplateId]: artifactId }
         };
 
         const sessions = await loadSessions();
@@ -496,10 +570,13 @@ export default function ResultsScreen() {
         await AsyncStorage.setItem("studysnap_sessions", JSON.stringify(updatedSessions));
 
         setSession(updatedSession);
+        setActiveArtifact(newArt);
         setEditableContent(content);
         setEditableTitle(updatedSession.title);
         setEditableCourse(updatedSession.course || "General");
         setEditableParentFolder(updatedSession.parentFolder || "General Folders");
+        setHighlights(newArt.highlights || []);
+        setSourceChanged(false);
         Alert.alert("Success", `Converted to ${TEMPLATES[newTemplateId].label}!`);
       } catch (e) {
         Alert.alert("Regeneration failed", "Could not convert to the new format.");
@@ -510,9 +587,71 @@ export default function ResultsScreen() {
     [session, editableContent, regenerating]
   );
 
+  const handleKeepCurrent = async () => {
+    if (!session || !activeArtifact) return;
+    const currentHash = computeSourceHash(session);
+    
+    const updatedArtifacts = (session.artifacts || []).map(art => 
+      art.id === activeArtifact.id ? { ...art, sourceHash: currentHash } : art
+    );
+    
+    const updatedSession = {
+      ...session,
+      artifacts: updatedArtifacts
+    };
+    
+    const sessions = await loadSessions();
+    const updatedSessions = sessions.map((s: Session) => (s.id === session.id ? updatedSession : s));
+    const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+    await AsyncStorage.setItem("studysnap_sessions", JSON.stringify(updatedSessions));
+    
+    setSession(updatedSession);
+    setActiveArtifact({ ...activeArtifact, sourceHash: currentHash });
+    setSourceChanged(false);
+    Alert.alert("Preferences Saved", "The current version has been marked as active for these updated notes.");
+  };
+
+  const handleSelectHistoryVersion = async (artId: string) => {
+    if (!session) return;
+    const art = session.artifacts?.find(a => a.id === artId);
+    if (!art) return;
+    
+    const updatedSession = {
+      ...session,
+      content: art.content,
+      activeArtifactIds: { ...(session.activeArtifactIds || {}), [session.templateId]: artId }
+    };
+    
+    const sessions = await loadSessions();
+    const updatedSessions = sessions.map((s: Session) => (s.id === session.id ? updatedSession : s));
+    const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+    await AsyncStorage.setItem("studysnap_sessions", JSON.stringify(updatedSessions));
+    
+    const currentHash = computeSourceHash(session);
+    setSession(updatedSession);
+    setActiveArtifact(art);
+    setEditableContent(art.content);
+    setHighlights(art.highlights || []);
+    setSourceChanged(art.sourceHash !== currentHash);
+    Alert.alert("Version Restored", `Switched to version generated on ${new Date(art.generatedAt).toLocaleDateString()}`);
+  };
+
   const handleSave = async () => {
     if (!session) return;
     try {
+      const currentHash = computeSourceHash(session);
+      const updatedArtifacts = (session.artifacts || []).map(art => {
+        if (activeArtifact && art.id === activeArtifact.id) {
+          return {
+            ...art,
+            content: editableContent,
+            userEdited: true,
+            sourceHash: currentHash
+          };
+        }
+        return art;
+      });
+
       const updatedSession = {
         ...session,
         title: editableTitle.trim() || session.title,
@@ -523,6 +662,7 @@ export default function ResultsScreen() {
           ...(session.contents || { [session.templateId]: session.content }),
           [session.templateId]: editableContent,
         },
+        artifacts: updatedArtifacts
       };
 
       const sessions = await loadSessions();
@@ -531,12 +671,106 @@ export default function ResultsScreen() {
       );
       const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
       await AsyncStorage.setItem("studysnap_sessions", JSON.stringify(updatedSessions));
+      
       setSession(updatedSession);
+      if (activeArtifact) {
+        setActiveArtifact({
+          ...activeArtifact,
+          content: editableContent,
+          userEdited: true,
+          sourceHash: currentHash
+        });
+      }
       setIsEditing(false);
+      setSourceChanged(false);
       Alert.alert("Saved", "Changes saved successfully.");
     } catch {
       Alert.alert("Error", "Could not save changes.");
     }
+  };
+
+  const handleAddHighlight = async (text: string, type: HighlightType, importance: 1 | 2 | 3) => {
+    if (!session || !activeArtifact || !text.trim()) return;
+    
+    const newHl: Highlight = {
+      text: text.trim(),
+      type,
+      importance,
+      reason: "Manually added by student"
+    };
+
+    const updatedHighlights = [...(highlights || []), newHl];
+    
+    const updatedArtifacts = (session.artifacts || []).map(art => 
+      art.id === activeArtifact.id ? { ...art, highlights: updatedHighlights } : art
+    );
+
+    const updatedSession = {
+      ...session,
+      artifacts: updatedArtifacts
+    };
+
+    const sessions = await loadSessions();
+    const updatedSessions = sessions.map((s: Session) => (s.id === session.id ? updatedSession : s));
+    const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+    await AsyncStorage.setItem("studysnap_sessions", JSON.stringify(updatedSessions));
+
+    setSession(updatedSession);
+    setHighlights(updatedHighlights);
+    if (activeArtifact) {
+      setActiveArtifact({ ...activeArtifact, highlights: updatedHighlights });
+    }
+    setAddHighlightModalVisible(false);
+    setNewHighlightText("");
+  };
+
+  const handleRemoveHighlight = async (text: string) => {
+    if (!session || !activeArtifact) return;
+
+    const updatedHighlights = (highlights || []).filter(h => h.text.toLowerCase() !== text.toLowerCase());
+    
+    const updatedArtifacts = (session.artifacts || []).map(art => 
+      art.id === activeArtifact.id ? { ...art, highlights: updatedHighlights } : art
+    );
+
+    const updatedSession = {
+      ...session,
+      artifacts: updatedArtifacts
+    };
+
+    const sessions = await loadSessions();
+    const updatedSessions = sessions.map((s: Session) => (s.id === session.id ? updatedSession : s));
+    const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+    await AsyncStorage.setItem("studysnap_sessions", JSON.stringify(updatedSessions));
+
+    setSession(updatedSession);
+    setHighlights(updatedHighlights);
+    if (activeArtifact) {
+      setActiveArtifact({ ...activeArtifact, highlights: updatedHighlights });
+    }
+  };
+
+  const handleHighlightPress = (hl: Highlight) => {
+    const typeLabels: Record<string, string> = {
+      term: "🔑 Key Term",
+      definition: "📖 Definition",
+      formula: "🧮 Formula / Rule",
+      exam: "🎯 Likely Exam Topic",
+      warning: "⚠️ Caution / Common Mistake"
+    };
+
+    Alert.alert(
+      typeLabels[hl.type] || "💡 Important Detail",
+      `${hl.text}\n\nImportance: ${"⭐".repeat(hl.importance)}\nReason: ${hl.reason || "AI identified concept."}`,
+      [
+        { text: "Done" },
+        {
+          text: "Remove Highlight",
+          style: "destructive",
+          onPress: () => handleRemoveHighlight(hl.text)
+        }
+      ]
+    );
   };
 
   const toggleFavorite = async () => {
@@ -964,54 +1198,107 @@ export default function ResultsScreen() {
                 />
               </View>
             ) : (
-              <View style={styles.contentCard}>
-                <View style={styles.contentCardHeader}>
-                  <Text style={styles.contentCardTitle}>📖 Study Summary</Text>
-                  <View style={styles.headerActionsToolbar}>
-                    {/* ELI5 Tutor Button */}
-                    <TouchableOpacity
-                      style={[styles.headerIconBtn, { backgroundColor: "rgba(245,158,11,0.08)", borderColor: "rgba(245,158,11,0.2)" }]}
-                      onPress={() => {
-                        setExplainModalVisible(true);
-                        setConceptToExplain("");
-                        setExplanationResult("");
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Feather name="help-circle" size={16} color="rgb(245,158,11)" />
-                    </TouchableOpacity>
-
-                    {/* Speak Button */}
-                    <TouchableOpacity
-                      style={styles.headerIconBtn}
-                      onPress={handleToggleSpeech}
-                      activeOpacity={0.7}
-                    >
-                      <Feather name={isSpeaking ? "square" : "volume-2"} size={16} color={Colors.textPrimary} />
-                    </TouchableOpacity>
-
-                    {/* Edit Button */}
-                    <TouchableOpacity
-                      style={styles.headerIconBtn}
-                      onPress={() => setIsEditing(true)}
-                      activeOpacity={0.7}
-                    >
-                      <Feather name="edit-2" size={16} color={Colors.textPrimary} />
-                    </TouchableOpacity>
-
-                    {/* More Actions Button */}
-                    <TouchableOpacity
-                      style={styles.headerIconBtn}
-                      onPress={() => setMoreMenuVisible(true)}
-                      activeOpacity={0.7}
-                    >
-                      <Feather name="more-horizontal" size={16} color={Colors.textPrimary} />
-                    </TouchableOpacity>
+              <View style={{ width: "100%" }}>
+                {sourceChanged && (
+                  <View style={styles.warningBanner}>
+                    <Feather name="alert-triangle" size={16} color="#f59e0b" style={{ marginRight: 8 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.warningBannerText}>
+                        Source notes or recordings have changed since this was generated.
+                      </Text>
+                      <View style={styles.warningBannerActions}>
+                        <TouchableOpacity
+                          style={styles.warningBannerBtn}
+                          onPress={() => handleRegenerate(session.templateId as TemplateId, true)}
+                        >
+                          <Text style={styles.warningBannerBtnText}>Regenerate</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.warningBannerBtn, { backgroundColor: "transparent", paddingLeft: 4 }]}
+                          onPress={handleKeepCurrent}
+                        >
+                          <Text style={[styles.warningBannerBtnText, { color: Colors.textSecondary }]}>Keep Current</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
+                )}
+                
+                <View style={styles.contentCard}>
+                  <View style={styles.contentCardHeader}>
+                    <Text style={styles.contentCardTitle}>📖 Study Summary</Text>
+                    <View style={styles.headerActionsToolbar}>
+                      {/* Focus Mode Button */}
+                      <TouchableOpacity
+                        style={[
+                          styles.headerIconBtn,
+                          focusMode && { backgroundColor: "rgba(192, 132, 252, 0.15)", borderColor: Colors.accent3 }
+                        ]}
+                        onPress={() => setFocusMode(prev => !prev)}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name={focusMode ? "eye" : "eye-off"} size={16} color={focusMode ? Colors.accent3 : Colors.textPrimary} />
+                      </TouchableOpacity>
+
+                      {/* Add Highlight Button */}
+                      <TouchableOpacity
+                        style={styles.headerIconBtn}
+                        onPress={() => setAddHighlightModalVisible(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="tag" size={16} color={Colors.textPrimary} />
+                      </TouchableOpacity>
+
+                      {/* ELI5 Tutor Button */}
+                      <TouchableOpacity
+                        style={[styles.headerIconBtn, { backgroundColor: "rgba(245,158,11,0.08)", borderColor: "rgba(245,158,11,0.2)" }]}
+                        onPress={() => {
+                          setExplainModalVisible(true);
+                          setConceptToExplain("");
+                          setExplanationResult("");
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="help-circle" size={16} color="rgb(245,158,11)" />
+                      </TouchableOpacity>
+
+                      {/* Speak Button */}
+                      <TouchableOpacity
+                        style={styles.headerIconBtn}
+                        onPress={handleToggleSpeech}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name={isSpeaking ? "square" : "volume-2"} size={16} color={Colors.textPrimary} />
+                      </TouchableOpacity>
+
+                      {/* Edit Button */}
+                      <TouchableOpacity
+                        style={styles.headerIconBtn}
+                        onPress={() => setIsEditing(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="edit-2" size={16} color={Colors.textPrimary} />
+                      </TouchableOpacity>
+
+                      {/* More Actions Button */}
+                      <TouchableOpacity
+                        style={styles.headerIconBtn}
+                        onPress={() => setMoreMenuVisible(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="more-horizontal" size={16} color={Colors.textPrimary} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  <ScrollView style={styles.readOnlyScroll} nestedScrollEnabled>
+                    <MarkdownText
+                      text={editableContent}
+                      highlights={highlights}
+                      focusMode={focusMode}
+                      onHighlightPress={handleHighlightPress}
+                    />
+                  </ScrollView>
                 </View>
-                <ScrollView style={styles.readOnlyScroll} nestedScrollEnabled>
-                  <MarkdownText text={editableContent} />
-                </ScrollView>
               </View>
             )}
 
@@ -1098,8 +1385,99 @@ export default function ResultsScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.fullscreenScroll} contentContainerStyle={styles.fullscreenScrollContent}>
-            <MarkdownText text={editableContent} />
+            <MarkdownText
+              text={editableContent}
+              highlights={highlights}
+              focusMode={focusMode}
+              onHighlightPress={handleHighlightPress}
+            />
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Add Highlight Modal */}
+      <Modal
+        visible={addHighlightModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setAddHighlightModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>🏷️ Add Custom Highlight</Text>
+            
+            <Text style={styles.fieldLabel}>Text or Phrase to Highlight</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="e.g. Mitochondria"
+              placeholderTextColor="#5a556e"
+              value={newHighlightText}
+              onChangeText={setNewHighlightText}
+            />
+
+            <Text style={styles.fieldLabel}>Category</Text>
+            <View style={styles.modalHighlightTypes}>
+              {(["term", "definition", "formula", "exam", "warning"] as HighlightType[]).map((t) => {
+                const labels: Record<string, string> = {
+                  term: "Key Term",
+                  definition: "Definition",
+                  formula: "Formula",
+                  exam: "Exam Topic",
+                  warning: "Warning"
+                };
+                return (
+                  <TouchableOpacity
+                    key={t}
+                    style={[
+                      styles.typeChip,
+                      newHighlightType === t && styles.typeChipActive
+                    ]}
+                    onPress={() => setNewHighlightType(t)}
+                  >
+                    <Text style={[styles.typeChipText, newHighlightType === t && styles.typeChipTextActive]}>
+                      {labels[t]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={styles.fieldLabel}>Importance</Text>
+            <View style={styles.importanceContainer}>
+              {([1, 2, 3] as const).map((level) => (
+                <TouchableOpacity
+                  key={level}
+                  style={[
+                    styles.importanceBtn,
+                    newHighlightImportance === level && styles.importanceBtnActive
+                  ]}
+                  onPress={() => setNewHighlightImportance(level)}
+                >
+                  <Text style={[styles.importanceText, newHighlightImportance === level && styles.importanceTextActive]}>
+                    {"⭐".repeat(level)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.modalActionButtons}>
+              <TouchableOpacity
+                style={[styles.modalActionBtn, { backgroundColor: "transparent" }]}
+                onPress={() => {
+                  setAddHighlightModalVisible(false);
+                  setNewHighlightText("");
+                }}
+              >
+                <Text style={[styles.modalActionBtnText, { color: Colors.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalActionBtn}
+                onPress={() => handleAddHighlight(newHighlightText, newHighlightType, newHighlightImportance)}
+              >
+                <Text style={styles.modalActionBtnText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 
@@ -1266,8 +1644,44 @@ export default function ResultsScreen() {
               )}
             </View>
 
+            {/* Version History section inside Document Options */}
+            {(() => {
+              const formatHistory = session?.artifacts?.filter(art => art.format === session.templateId) || [];
+              if (formatHistory.length > 1) {
+                return (
+                  <View style={{ marginTop: Spacing.md, borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: Spacing.sm }}>
+                    <Text style={{ fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.accent3, marginBottom: Spacing.xs }}>
+                      🕰️ Version History
+                    </Text>
+                    <ScrollView style={{ maxHeight: 120 }}>
+                      {formatHistory.map((art, idx) => (
+                        <TouchableOpacity
+                          key={art.id}
+                          style={[
+                            styles.moreMenuOption,
+                            { height: 36, paddingVertical: 4 },
+                            art.id === activeArtifact?.id && { backgroundColor: "rgba(124,58,237,0.15)", borderRadius: 6 }
+                          ]}
+                          onPress={() => {
+                            setMoreMenuVisible(false);
+                            handleSelectHistoryVersion(art.id);
+                          }}
+                        >
+                          <Feather name="clock" size={14} color={art.id === activeArtifact?.id ? Colors.accent3 : Colors.textSecondary} style={{ marginRight: Spacing.sm }} />
+                          <Text style={{ fontSize: FontSize.sm, color: art.id === activeArtifact?.id ? Colors.accent3 : Colors.textPrimary, flex: 1 }}>
+                            v{formatHistory.length - idx} ({new Date(art.generatedAt).toLocaleDateString()}){art.userEdited ? " [Edited]" : ""}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                );
+              }
+              return null;
+            })()}
+
             <TouchableOpacity
-              style={[styles.modalBtn, styles.modalBtnCancel, { marginTop: Spacing.xs }]}
+              style={[styles.modalBtn, styles.modalBtnCancel, { marginTop: Spacing.sm }]}
               onPress={() => setMoreMenuVisible(false)}
             >
               <Text style={styles.modalBtnCancelText}>Cancel</Text>
@@ -1878,6 +2292,117 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   saveBtnText: { color: Colors.white, fontSize: FontSize.xs, fontWeight: FontWeight.bold },
+
+  // Warning Banner Styles
+  warningBanner: {
+    flexDirection: "row",
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.3)",
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    width: "100%",
+  },
+  warningBannerText: {
+    color: "#f59e0b",
+    fontSize: FontSize.sm,
+    lineHeight: 18,
+    fontWeight: FontWeight.medium,
+  },
+  warningBannerActions: {
+    flexDirection: "row",
+    marginTop: Spacing.xs,
+    gap: Spacing.sm,
+  },
+  warningBannerBtn: {
+    backgroundColor: "rgba(245, 158, 11, 0.2)",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+  },
+  warningBannerBtnText: {
+    color: "#f59e0b",
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+  },
+
+  // Highlight Modal Styles
+  modalHighlightTypes: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+    marginVertical: Spacing.xs,
+  },
+  typeChip: {
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: Radius.md,
+  },
+  typeChipActive: {
+    backgroundColor: "rgba(124, 58, 237, 0.15)",
+    borderColor: Colors.accent3,
+  },
+  typeChipText: {
+    color: Colors.textSecondary,
+    fontSize: FontSize.xs,
+  },
+  typeChipTextActive: {
+    color: Colors.accent3,
+    fontWeight: FontWeight.bold,
+  },
+  importanceContainer: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginVertical: Spacing.xs,
+  },
+  importanceBtn: {
+    flex: 1,
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center",
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+  },
+  importanceBtnActive: {
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+    borderColor: "#f59e0b",
+  },
+  importanceText: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+  },
+  importanceTextActive: {
+    color: "#f59e0b",
+    fontWeight: FontWeight.bold,
+  },
+  fieldLabel: {
+    color: Colors.textSecondary,
+    fontSize: FontSize.xs,
+    marginTop: Spacing.sm,
+    marginBottom: 4,
+  },
+  modalActionButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  modalActionBtn: {
+    backgroundColor: Colors.accent1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: Radius.sm,
+  },
+  modalActionBtnText: {
+    color: Colors.white,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+  },
 
   contentCard: {
     backgroundColor: Colors.bgCard,
