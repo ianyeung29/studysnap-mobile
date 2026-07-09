@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
 import { transcribeAudio, summarize } from "@/lib/api";
+import { trackEvent, incrementLocalDailyLimit } from "@/lib/analytics";
 import { addSession } from "@/lib/storage";
 import { getTempExtraNotes } from "@/lib/draftCache";
 import WaveformAnimation from "@/components/WaveformAnimation";
@@ -249,6 +250,16 @@ export default function ProcessingScreen() {
       await addSession(session);
       updateStep("save", "done", "Session saved ✓");
 
+      // Analytics cost track event
+      await incrementLocalDailyLimit();
+      const eventName =
+        templateId === "study-guide"
+          ? "study_guide_generated"
+          : templateId === "flashcards"
+          ? "flashcards_generated"
+          : "quiz_generated";
+      trackEvent(eventName);
+
       // Navigate to results
       setTimeout(() => {
         router.replace({
@@ -258,6 +269,10 @@ export default function ProcessingScreen() {
       }, 600);
     } catch (err: unknown) {
       console.error("[Compilation Step Error] failed:", err);
+
+      const msg = err instanceof Error ? err.message : "Something went wrong.";
+      // Analytics fail track event
+      trackEvent("generation_failed", { error: msg });
 
       try {
         const failedSession = {
@@ -282,7 +297,6 @@ export default function ProcessingScreen() {
         console.error("Failed to save recovery session draft:", saveErr);
       }
 
-      const msg = err instanceof Error ? err.message : "Something went wrong.";
       Alert.alert(
         "Generation Failed",
         `${msg}\n\nWe have safely saved your recording and edited notes. You can retry compiling it from your history list.`,

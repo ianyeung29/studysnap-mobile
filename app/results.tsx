@@ -28,6 +28,7 @@ import { scheduleCustomReminder } from "../lib/notifications";
 import { Feather } from "@expo/vector-icons";
 import { subscriptionService } from "@/lib/subscription";
 import SubscriptionPaywall from "@/components/SubscriptionPaywall";
+import { trackEvent } from "@/lib/analytics";
 
 export default function ResultsScreen() {
   const router = useRouter();
@@ -506,6 +507,7 @@ export default function ResultsScreen() {
       const cachedArt = session.artifacts?.find(a => a.id === activeId);
 
       if (cachedArt && !forceRegenerate) {
+        trackEvent("artifact_cache_hit", { templateId: newTemplateId });
         const updatedSession = {
           ...session,
           templateId: newTemplateId,

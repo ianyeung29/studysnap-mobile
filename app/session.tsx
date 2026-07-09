@@ -24,6 +24,7 @@ import { addSession } from "@/lib/storage";
 import { setTempExtraNotes } from "@/lib/draftCache";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
+import { trackEvent, checkLocalDailyLimit, incrementLocalDailyLimit } from "@/lib/analytics";
 
 interface PhotoItem {
   uri: string;
@@ -89,6 +90,7 @@ export default function SessionScreen() {
   }, [recorder, params.preloadedAudioUri, params.skipAudio]);
 
   const startSessionFlow = () => {
+    trackEvent("start_session_clicked");
     if (params.skipAudio === "true") {
       setRecordedAudioUri(null);
       setStep("photos");
@@ -96,6 +98,7 @@ export default function SessionScreen() {
       setSeconds(0);
       isRecordingStoppedRef.current = true;
     } else if (params.preloadedAudioUri) {
+      trackEvent("audio_imported", { durationSeconds: 300 });
       setRecordedAudioUri(params.preloadedAudioUri);
       setStep("photos");
       setStatus("stopped");
@@ -126,6 +129,7 @@ export default function SessionScreen() {
 
       await recorder.prepareToRecordAsync();
       recorder.record();
+      trackEvent("recording_started");
       setStatus("recording");
       startTimer();
     } catch (e) {
@@ -189,6 +193,7 @@ export default function SessionScreen() {
     if (result.canceled || !result.assets[0]) return;
  
     const uri = result.assets[0].uri;
+    trackEvent("photo_added", { source: "camera" });
     const newPhoto: PhotoItem = { uri, processing: true };
     setPhotos((prev) => [...prev, newPhoto]);
  
@@ -222,6 +227,7 @@ export default function SessionScreen() {
  
     for (const asset of result.assets) {
       const uri = asset.uri;
+      trackEvent("photo_added", { source: "library" });
       setPhotos((prev) => [...prev, { uri, processing: true }]);
  
       extractImageText(uri)
@@ -252,6 +258,7 @@ export default function SessionScreen() {
     isRecordingStoppedRef.current = true;
     try {
       await recorder.stop();
+      trackEvent("recording_stopped", { durationSeconds: seconds });
       setRecordedAudioUri(recorder.uri ?? null);
       setStep("photos"); // Transition to Step 2
     } catch (e) {
@@ -278,6 +285,18 @@ export default function SessionScreen() {
 
   const handleFinalGenerate = useCallback(async () => {
     if (isGenerating) return;
+
+    // Early daily generation limit check (Beta warning)
+    const limitCheck = await checkLocalDailyLimit();
+    if (!limitCheck.allowed) {
+      Alert.alert(
+        "Daily Limit Reached",
+        "You have reached your daily allowance of 5 generated study guides/quizzes in the beta. Limits reset tomorrow!",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
     setIsGenerating(true);
 
     try {

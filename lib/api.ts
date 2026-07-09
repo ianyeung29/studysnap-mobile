@@ -1,6 +1,7 @@
 // lib/api.ts — All calls to the Next.js backend with detailed logging and file system checks
 import * as FileSystem from "expo-file-system/legacy";
 import { Highlight } from "./storage";
+import { getAnonymousInstallId } from "./analytics";
 
 // ─── CONFIG ──────────────────────────────────────────────────
 // During development: set this to your computer's local IP
@@ -120,13 +121,14 @@ export async function summarize(
   templateId: string,
   isMaster: boolean = false
 ): Promise<{ title: string; content: string; course?: string; highlights?: Highlight[] }> {
+  const userId = await getAnonymousInstallId();
   const res = await loggedFetch(`${API_BASE_URL}/api/summarize`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Bypass-Tunnel-Reminder": "true",
     },
-    body: JSON.stringify({ notes, templateId, isMaster }),
+    body: JSON.stringify({ notes, templateId, isMaster, userId }),
   });
 
   if (!res.ok) {
@@ -150,18 +152,19 @@ export async function explainConcept(
   mode: string = "eli5",
   userAnswer: string = ""
 ): Promise<string> {
+  const userId = await getAnonymousInstallId();
   const res = await loggedFetch(`${API_BASE_URL}/api/explain`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Bypass-Tunnel-Reminder": "true",
     },
-    body: JSON.stringify({ concept, context, mode, userAnswer }),
+    body: JSON.stringify({ concept, context, mode, userAnswer, userId }),
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || "Concept explanation failed.");
+    throw new Error(err.error || "Explanation failed.");
   }
 
   const data = await res.json();

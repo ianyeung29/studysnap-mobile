@@ -23,7 +23,7 @@ import SubscriptionPaywall from "@/components/SubscriptionPaywall";
 import BottomNav from "@/components/BottomNav";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
-
+import { trackEvent } from "@/lib/analytics";
 export default function HomeScreen() {
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -84,6 +84,7 @@ export default function HomeScreen() {
 
     Linking.canOpenURL(mailtoUrl).then((supported) => {
       if (supported) {
+        trackEvent("feedback_submitted", { type: feedbackType });
         Linking.openURL(mailtoUrl);
         setSettingsModalVisible(false);
         setFeedbackText("");
@@ -115,6 +116,7 @@ export default function HomeScreen() {
                 "privacy_policy_version"
               ];
               await Promise.all(keys.map((k) => AsyncStorage.removeItem(k)));
+              trackEvent("delete_local_data_clicked");
               setSessions([]);
               setSettingsModalVisible(false);
               Alert.alert("Success", "All local data has been successfully deleted from this device.");
@@ -132,6 +134,7 @@ export default function HomeScreen() {
   const handleCompleteOnboarding = async () => {
     try {
       await AsyncStorage.setItem("has_completed_onboarding_v1", "true");
+      trackEvent("onboarding_completed");
       setShowOnboarding(false);
     } catch (err) {
       console.error("Error writing onboarding completion", err);
