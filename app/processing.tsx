@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
 import { transcribeAudio, summarize } from "@/lib/api";
 import { addSession } from "@/lib/storage";
+import { getTempExtraNotes } from "@/lib/draftCache";
 import WaveformAnimation from "@/components/WaveformAnimation";
 import * as FileSystem from "expo-file-system/legacy";
 
@@ -64,7 +65,7 @@ export default function ProcessingScreen() {
     const existingPhotoTexts: string[] = JSON.parse(params.photoTexts || "[]");
     const durationSeconds = parseInt(params.durationSeconds || "0");
     const templateId = params.templateId || "study-guide";
-    const extraNotes = params.extraNotes || "";
+    const extraNotes = getTempExtraNotes() || params.extraNotes || "";
 
     // Build initial steps
     const initialSteps: Step[] = [

@@ -20,6 +20,7 @@ import WaveformAnimation from "@/components/WaveformAnimation";
 import { TEMPLATES, TemplateId } from "@/lib/templates";
 import { transcribeAudio, extractImageText, summarize } from "@/lib/api";
 import { addSession } from "@/lib/storage";
+import { setTempExtraNotes } from "@/lib/draftCache";
 
 interface PhotoItem {
   uri: string;
@@ -260,6 +261,9 @@ export default function SessionScreen() {
       // Wait for any still-processing photos
       const currentPhotos = photos;
 
+      // Cache the potentially large extra notes payload to prevent URL character limits/corruption in navigation
+      setTempExtraNotes(extraNotes.trim());
+
       router.replace({
         pathname: "/processing",
         params: {
@@ -272,7 +276,6 @@ export default function SessionScreen() {
           templateId,
           course: course.trim(),
           markers: JSON.stringify(markers),
-          extraNotes: extraNotes.trim(),
         },
       });
     } catch (e) {
