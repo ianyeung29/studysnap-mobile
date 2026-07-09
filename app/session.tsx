@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   TextInput,
+  Modal,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -21,6 +22,8 @@ import { TEMPLATES, TemplateId } from "@/lib/templates";
 import { transcribeAudio, extractImageText, summarize } from "@/lib/api";
 import { addSession } from "@/lib/storage";
 import { setTempExtraNotes } from "@/lib/draftCache";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Feather } from "@expo/vector-icons";
 
 interface PhotoItem {
   uri: string;
@@ -56,8 +59,36 @@ export default function SessionScreen() {
   const [recordedAudioUri, setRecordedAudioUri] = useState<string | null>(null);
   const [markers, setMarkers] = useState<string[]>([]);
 
+  // Privacy Policy States
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
+
   // ── Start recording on mount (or load preloaded audio) ────────
   useEffect(() => {
+    const checkPrivacy = async () => {
+      try {
+        const accepted = await AsyncStorage.getItem("has_accepted_privacy_v1");
+        if (accepted !== "true") {
+          setPrivacyModalVisible(true);
+          setStatus("stopped");
+        } else {
+          startSessionFlow();
+        }
+      } catch (err) {
+        console.error("Error reading privacy config", err);
+        startSessionFlow(); // Fallback to avoid blocking user if storage errors
+      }
+    };
+    checkPrivacy();
+
+    return () => {
+      stopTimer();
+      if (!isRecordingStoppedRef.current && params.skipAudio !== "true") {
+        recorder.stop().catch(() => {});
+      }
+    };
+  }, [recorder, params.preloadedAudioUri, params.skipAudio]);
+
+  const startSessionFlow = () => {
     if (params.skipAudio === "true") {
       setRecordedAudioUri(null);
       setStep("photos");
@@ -73,13 +104,7 @@ export default function SessionScreen() {
     } else {
       startRecording();
     }
-    return () => {
-      stopTimer();
-      if (!isRecordingStoppedRef.current && params.skipAudio !== "true") {
-        recorder.stop().catch(() => {});
-      }
-    };
-  }, [recorder, params.preloadedAudioUri, params.skipAudio]);
+  };
 
   const startRecording = async () => {
     try {
@@ -284,6 +309,134 @@ export default function SessionScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["bottom"]}>
+      {/* Privacy Consent Modal */}
+      <Modal
+        visible={privacyModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {}} // User must make a choice
+      >
+        <View style={styles.privacyModalOverlay}>
+          <View style={styles.privacyModalContent}>
+            <View style={styles.privacyModalHeader}>
+              <Feather name="shield" size={24} color={Colors.accent3} style={{ marginRight: Spacing.sm }} />
+              <Text style={styles.privacyModalTitle}>Privacy & Data Policy</Text>
+            </View>
+
+            <ScrollView style={styles.privacyModalScroll} showsVerticalScrollIndicator={false}>
+              <Text style={styles.privacyModalIntro}>
+                StudySnap is built to help you learn while keeping your data private. Here is how your study sessions are processed:
+              </Text>
+
+              <View style={styles.privacyBulletRow}>
+                <Feather name="lock" size={16} color={Colors.accent2} style={styles.privacyBulletIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.privacyBulletTitle}>Secure Transfer</Text>
+                  <Text style={styles.privacyBulletDesc}>
+                    Your recordings, photos, and generated study requests are sent securely using HTTPS.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.privacyBulletRow}>
+                <Feather name="cpu" size={16} color={Colors.accent2} style={styles.privacyBulletIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.privacyBulletTitle}>AI Processing</Text>
+                  <Text style={styles.privacyBulletDesc}>
+                    We send selected content to trusted AI providers, such as OpenAI and/or DeepSeek, to transcribe, extract text, and generate study materials.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.privacyBulletRow}>
+                <Feather name="hard-drive" size={16} color={Colors.accent2} style={styles.privacyBulletIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.privacyBulletTitle}>Our Storage</Text>
+                  <Text style={styles.privacyBulletDesc}>
+                    StudySnap does not intentionally store your raw audio or photos on our servers after processing. Generated study materials are saved on your device so you can reopen them without regenerating.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.privacyBulletRow}>
+                <Feather name="clock" size={16} color={Colors.accent2} style={styles.privacyBulletIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.privacyBulletTitle}>Provider Retention</Text>
+                  <Text style={styles.privacyBulletDesc}>
+                    AI providers may temporarily process or retain submitted content according to their own policies and legal/security requirements.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.privacyBulletRow}>
+                <Feather name="smartphone" size={16} color={Colors.accent2} style={styles.privacyBulletIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.privacyBulletTitle}>Local Control</Text>
+                  <Text style={styles.privacyBulletDesc}>
+                    You can delete sessions and cached study materials from your device.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.privacyBulletRow}>
+                <Feather name="alert-triangle" size={16} color={Colors.accent2} style={styles.privacyBulletIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.privacyBulletTitle}>AI Accuracy</Text>
+                  <Text style={styles.privacyBulletDesc}>
+                    AI-generated notes, flashcards, quizzes, and explanations may contain mistakes. Always verify important information with your instructor or source material.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.privacyBulletRow}>
+                <Feather name="check-square" size={16} color={Colors.accent2} style={styles.privacyBulletIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.privacyBulletTitle}>Recording Consent</Text>
+                  <Text style={styles.privacyBulletDesc}>
+                    Only record lectures, conversations, or classroom content when you have permission or are allowed to do so under your school's rules and local law.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Policy Links Row */}
+              <View style={styles.privacyModalLinksRow}>
+                <TouchableOpacity onPress={() => Alert.alert("Privacy Policy", "For our complete Privacy Policy, visit studysnap.app/privacy-policy")}>
+                  <Text style={styles.privacyLinkText}>Privacy Policy</Text>
+                </TouchableOpacity>
+                <Text style={styles.privacyLinkSeparator}>•</Text>
+                <TouchableOpacity onPress={() => Alert.alert("Terms of Service", "For our full Terms of Service, visit studysnap.app/terms-of-service")}>
+                  <Text style={styles.privacyLinkText}>Terms</Text>
+                </TouchableOpacity>
+                <Text style={styles.privacyLinkSeparator}>•</Text>
+                <TouchableOpacity onPress={() => Alert.alert("AI Disclaimer", "Artificial Intelligence outputs are generated for educational support. Students must exercise standard verification practices.")}>
+                  <Text style={styles.privacyLinkText}>AI Disclaimer</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.privacyAcceptBtn}
+              activeOpacity={0.8}
+              onPress={async () => {
+                try {
+                  await AsyncStorage.setItem("has_accepted_privacy_v1", "true");
+                  await AsyncStorage.setItem("privacy_accepted_at", new Date().toISOString());
+                  await AsyncStorage.setItem("privacy_policy_version", "1");
+                  setPrivacyModalVisible(false);
+                  startSessionFlow();
+                } catch (err) {
+                  console.error("Error persisting privacy acceptance", err);
+                  setPrivacyModalVisible(false);
+                  startSessionFlow();
+                }
+              }}
+            >
+              <Text style={styles.privacyAcceptBtnText}>Agree & Start Session</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
@@ -489,6 +642,97 @@ export default function SessionScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bgPrimary },
+  
+  // Privacy Modal Styles
+  privacyModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(10, 10, 15, 0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.xl,
+  },
+  privacyModalContent: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.lg,
+    width: "100%",
+    maxHeight: "85%",
+    gap: Spacing.md,
+  },
+  privacyModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: Spacing.xs,
+  },
+  privacyModalTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  privacyModalScroll: {
+    flexGrow: 0,
+  },
+  privacyModalIntro: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: Spacing.md,
+  },
+  privacyBulletRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+    alignItems: "flex-start",
+  },
+  privacyBulletIcon: {
+    marginTop: 2,
+  },
+  privacyBulletTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+    marginBottom: 2,
+  },
+  privacyBulletDesc: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    lineHeight: 18,
+  },
+  privacyModalLinksRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.05)",
+  },
+  privacyLinkText: {
+    fontSize: FontSize.xs,
+    color: Colors.accent3,
+    fontWeight: FontWeight.semibold,
+    textDecorationLine: "underline",
+  },
+  privacyLinkSeparator: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+  },
+  privacyAcceptBtn: {
+    backgroundColor: Colors.accent1,
+    height: 48,
+    borderRadius: Radius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  privacyAcceptBtnText: {
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.base,
+  },
   scroll: { flex: 1 },
   content: { padding: Spacing.lg, paddingBottom: Spacing["3xl"], gap: Spacing.lg },
 
