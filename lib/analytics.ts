@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
-const API_BASE = "https://studysnap-backend.vercel.app"; // Fallback URL or configure accordingly
+const API_BASE = "https://studysnap-backend-kittycatty.vercel.app"; // Fallback URL or configure accordingly
 
 // Centralized analytics helper
 export async function getAnonymousInstallId(): Promise<string> {
@@ -42,7 +42,7 @@ export async function trackEvent(eventName: string, metadata?: Record<string, an
       }),
     }).catch((err) => {
       // Fallback: try remote Vercel if local dev server isn't running
-      const remoteUrl = `https://studysnap-backend.vercel.app/api/analytics`;
+      const remoteUrl = `https://studysnap-backend-kittycatty.vercel.app/api/analytics`;
       fetch(remoteUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
