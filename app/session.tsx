@@ -175,6 +175,17 @@ export default function SessionScreen() {
 
   // ── Take Photo ──────────────────────────────────────────────
   const handleTakePhoto = useCallback(async () => {
+    const isPremiumVal = await AsyncStorage.getItem("studysnap_premium_entitlement");
+    const isPremium = isPremiumVal === "true";
+    const maxPhotos = isPremium ? 15 : 3;
+    if (photos.length >= maxPhotos) {
+      Alert.alert(
+        "Photo Limit Reached",
+        `You have reached the maximum limit of ${maxPhotos} photos for your tier. Upgrade to Premium to upload up to 15 photos per session.`
+      );
+      return;
+    }
+
     const { granted } = await ImagePicker.requestCameraPermissionsAsync();
     if (!granted) {
       Alert.alert(
@@ -198,7 +209,7 @@ export default function SessionScreen() {
     setPhotos((prev) => [...prev, newPhoto]);
  
     // Extract text in background
-    extractImageText(uri)
+    extractImageText(uri, photos.length + 1)
       .then((text: string) => {
         setPhotos((prev) =>
           prev.map((p) =>
@@ -217,6 +228,17 @@ export default function SessionScreen() {
  
   // ── Pick from library ───────────────────────────────────────
   const handlePickPhoto = useCallback(async () => {
+    const isPremiumVal = await AsyncStorage.getItem("studysnap_premium_entitlement");
+    const isPremium = isPremiumVal === "true";
+    const maxPhotos = isPremium ? 15 : 3;
+    if (photos.length >= maxPhotos) {
+      Alert.alert(
+        "Photo Limit Reached",
+        `You have reached the maximum limit of ${maxPhotos} photos for your tier. Upgrade to Premium to upload up to 15 photos per session.`
+      );
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       quality: 0.85,
@@ -225,12 +247,23 @@ export default function SessionScreen() {
  
     if (result.canceled) return;
  
+    let addedCount = 0;
     for (const asset of result.assets) {
+      // Don't exceed maximum photos in batch imports
+      if (photos.length + addedCount >= maxPhotos) {
+        Alert.alert(
+          "Photo Limit Enforced",
+          `Only imported up to the ${maxPhotos} photo limit for your tier.`
+        );
+        break;
+      }
+      addedCount++;
+
       const uri = asset.uri;
       trackEvent("photo_added", { source: "library" });
       setPhotos((prev) => [...prev, { uri, processing: true }]);
  
-      extractImageText(uri)
+      extractImageText(uri, photos.length + addedCount)
         .then((text: string) => {
           setPhotos((prev) =>
             prev.map((p) =>

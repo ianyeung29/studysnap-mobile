@@ -121,7 +121,7 @@ export default function ProcessingScreen() {
       // 1. Transcribe audio
       if (permanentAudioUri) {
         updateStep("audio", "running");
-        audioTranscript = await transcribeAudio(permanentAudioUri);
+        audioTranscript = await transcribeAudio(permanentAudioUri, durationSeconds);
         updateStep("audio", "done", "Lecture transcribed ✓");
       }
 

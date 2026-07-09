@@ -109,7 +109,7 @@ export default function ResultsScreen() {
 
       // 1. If transcription failed earlier, perform it now using the permanently saved audio!
       if (!audioTranscript && session.audioUri) {
-        audioTranscript = await transcribeAudio(session.audioUri);
+        audioTranscript = await transcribeAudio(session.audioUri, session.durationSeconds);
       }
 
       // 2. Combine inputs

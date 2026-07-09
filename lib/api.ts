@@ -36,7 +36,7 @@ async function loggedFetch(
 }
 
 // ─── Transcribe Audio ─────────────────────────────────────────
-export async function transcribeAudio(audioUri: string): Promise<string> {
+export async function transcribeAudio(audioUri: string, durationSeconds: number): Promise<string> {
   try {
     console.log(`[File System Check] Checking audio file at: ${audioUri}`);
     const fileInfo = await FileSystem.getInfoAsync(audioUri);
@@ -51,6 +51,9 @@ export async function transcribeAudio(audioUri: string): Promise<string> {
   }
 
   const formData = new FormData();
+  const userId = await getAnonymousInstallId();
+  const entitlement = await subscriptionService.getEntitlement();
+  const isPremium = entitlement.isActive;
 
   // React Native requires this specific blob format for file uploads
   formData.append("audio", {
@@ -58,6 +61,10 @@ export async function transcribeAudio(audioUri: string): Promise<string> {
     type: "audio/m4a",
     name: "recording.m4a",
   } as unknown as Blob);
+
+  formData.append("userId", userId);
+  formData.append("isPremium", String(isPremium));
+  formData.append("durationSeconds", String(durationSeconds));
 
   const res = await loggedFetch(`${API_BASE_URL}/api/transcribe`, {
     method: "POST",
@@ -77,7 +84,7 @@ export async function transcribeAudio(audioUri: string): Promise<string> {
 }
 
 // ─── Extract Text From Photo ──────────────────────────────────
-export async function extractImageText(imageUri: string): Promise<string> {
+export async function extractImageText(imageUri: string, photoCount: number): Promise<string> {
   try {
     console.log(`[File System Check] Checking image file at: ${imageUri}`);
     const fileInfo = await FileSystem.getInfoAsync(imageUri);
@@ -92,12 +99,19 @@ export async function extractImageText(imageUri: string): Promise<string> {
   }
 
   const formData = new FormData();
+  const userId = await getAnonymousInstallId();
+  const entitlement = await subscriptionService.getEntitlement();
+  const isPremium = entitlement.isActive;
 
   formData.append("image", {
     uri: imageUri,
     type: "image/jpeg",
     name: "photo.jpg",
   } as unknown as Blob);
+
+  formData.append("userId", userId);
+  formData.append("isPremium", String(isPremium));
+  formData.append("photoCount", String(photoCount));
 
   const res = await loggedFetch(`${API_BASE_URL}/api/extract-image`, {
     method: "POST",
