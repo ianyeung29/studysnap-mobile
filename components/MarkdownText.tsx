@@ -133,7 +133,10 @@ const styles = StyleSheet.create({
   },
   boldText: {
     fontWeight: FontWeight.bold,
-    color: Colors.textPrimary,
+    color: Colors.accent3, // High-contrast bright purple key terms
+    backgroundColor: "rgba(192, 132, 252, 0.12)", // Soft neon marker highlight effect
+    paddingHorizontal: 4,
+    borderRadius: 4,
   },
   divider: {
     height: 1,
