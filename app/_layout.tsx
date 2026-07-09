@@ -1,8 +1,9 @@
-// app/_layout.tsx — Root layout with Expo Router
+import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { LogBox } from "react-native";
 import { Colors } from "@/constants/theme";
+import { configureSubscriptions } from "@/lib/subscription";
 
 // Suppress push notification token warnings generated inside Expo Go
 LogBox.ignoreLogs([
@@ -10,6 +11,10 @@ LogBox.ignoreLogs([
 ]);
 
 export default function RootLayout() {
+  useEffect(() => {
+    configureSubscriptions();
+  }, []);
+
   return (
     <>
       <StatusBar style="light" />
