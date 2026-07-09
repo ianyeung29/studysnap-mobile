@@ -32,7 +32,7 @@ type RecordingStatus = "requesting" | "recording" | "stopped";
 
 export default function SessionScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ preloadedAudioUri?: string }>();
+  const params = useLocalSearchParams<{ preloadedAudioUri?: string; skipAudio?: string }>();
 
   // Recording state
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -57,7 +57,13 @@ export default function SessionScreen() {
 
   // ── Start recording on mount (or load preloaded audio) ────────
   useEffect(() => {
-    if (params.preloadedAudioUri) {
+    if (params.skipAudio === "true") {
+      setRecordedAudioUri(null);
+      setStep("photos");
+      setStatus("stopped");
+      setSeconds(0);
+      isRecordingStoppedRef.current = true;
+    } else if (params.preloadedAudioUri) {
       setRecordedAudioUri(params.preloadedAudioUri);
       setStep("photos");
       setStatus("stopped");
@@ -68,11 +74,11 @@ export default function SessionScreen() {
     }
     return () => {
       stopTimer();
-      if (!isRecordingStoppedRef.current) {
+      if (!isRecordingStoppedRef.current && params.skipAudio !== "true") {
         recorder.stop().catch(() => {});
       }
     };
-  }, [recorder, params.preloadedAudioUri]);
+  }, [recorder, params.preloadedAudioUri, params.skipAudio]);
 
   const startRecording = async () => {
     try {

@@ -190,6 +190,35 @@ export default function HomeScreen() {
           <Text style={styles.importBtnText}>Import Pre-recorded Audio File</Text>
         </TouchableOpacity>
 
+        {/* Compile Notes/Photos Only CTA */}
+        <TouchableOpacity
+          style={[styles.importBtn, { marginTop: Spacing.xs }]}
+          onPress={() => {
+            const activeSessions = sessions.filter((s) => !s.isFailed);
+            if (!isPremium && activeSessions.length >= 2) {
+              Alert.alert(
+                "Free Limit Reached",
+                "You have processed the limit of 2 free lecture sessions. Please upgrade to Premium for unlimited lectures and imports!",
+                [
+                  { text: "View Plans", onPress: () => setPaywallVisible(true) },
+                  { text: "Cancel", style: "cancel" },
+                ]
+              );
+              return;
+            }
+            router.push({
+              pathname: "/session",
+              params: {
+                skipAudio: "true",
+              },
+            });
+          }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.importBtnIcon}>📝</Text>
+          <Text style={styles.importBtnText}>Compile Pasted Notes & Photos Only</Text>
+        </TouchableOpacity>
+
         {/* How it works */}
         <View style={styles.steps}>
           {[
