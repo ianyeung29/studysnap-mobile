@@ -107,7 +107,14 @@ export default function HomeScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await AsyncStorage.clear();
+              const keys = [
+                "sessions",
+                "has_completed_onboarding_v1",
+                "has_accepted_privacy_v1",
+                "privacy_accepted_at",
+                "privacy_policy_version"
+              ];
+              await Promise.all(keys.map((k) => AsyncStorage.removeItem(k)));
               setSessions([]);
               setSettingsModalVisible(false);
               Alert.alert("Success", "All local data has been successfully deleted from this device.");

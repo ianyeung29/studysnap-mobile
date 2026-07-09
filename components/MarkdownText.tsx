@@ -27,7 +27,7 @@ export default function MarkdownText({
           key={parentIndex}
           style={[
             parentIsBold ? styles.boldText : null,
-            focusMode ? { opacity: 0.25 } : null
+            focusMode ? { opacity: 0.45 } : null
           ]}
         >
           {inputText}
@@ -43,7 +43,7 @@ export default function MarkdownText({
           key={parentIndex}
           style={[
             parentIsBold ? styles.boldText : null,
-            focusMode ? { opacity: 0.25 } : null
+            focusMode ? { opacity: 0.45 } : null
           ]}
         >
           {inputText}
@@ -89,7 +89,7 @@ export default function MarkdownText({
               key={i}
               style={[
                 parentIsBold ? styles.boldText : null,
-                focusMode ? { opacity: 0.25 } : null
+                focusMode ? { opacity: 0.45 } : null
               ]}
             >
               {part}
