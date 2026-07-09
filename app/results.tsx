@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState, useCallback } from "react";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import * as Clipboard from "expo-clipboard";
@@ -31,6 +31,7 @@ import SubscriptionPaywall from "@/components/SubscriptionPaywall";
 
 export default function ResultsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ sessionId: string }>();
   const [session, setSession] = useState<Session | null>(null);
   const [editableContent, setEditableContent] = useState("");
@@ -568,6 +569,16 @@ export default function ResultsScreen() {
     } else {
       const textToSpeak = cleanMarkdownForSpeech(editableContent);
       if (!textToSpeak) return;
+
+      const wordCount = textToSpeak.split(/\s+/).filter(Boolean).length;
+      if (wordCount > 4000) {
+        Alert.alert(
+          "Text-to-Speech Limit",
+          "Audio reader is not supported for content exceeding 4,000 words."
+        );
+        return;
+      }
+
       setIsSpeaking(true);
       Speech.speak(textToSpeak, {
         onDone: () => setIsSpeaking(false),
@@ -1076,7 +1087,7 @@ export default function ResultsScreen() {
         animationType="slide"
         onRequestClose={() => setReadingMaximized(false)}
       >
-        <SafeAreaView style={[styles.safe, { backgroundColor: Colors.bgPrimary, flex: 1 }]}>
+        <View style={{ backgroundColor: Colors.bgPrimary, flex: 1, paddingTop: insets.top }}>
           <View style={styles.fullscreenHeader}>
             <Text style={styles.fullscreenTitle}>📖 Immersive Reading Mode</Text>
             <TouchableOpacity
@@ -1089,7 +1100,7 @@ export default function ResultsScreen() {
           <ScrollView style={styles.fullscreenScroll} contentContainerStyle={styles.fullscreenScrollContent}>
             <MarkdownText text={editableContent} />
           </ScrollView>
-        </SafeAreaView>
+        </View>
       </Modal>
 
       {/* User Custom Reminder Modal (Redesigned Compact Layout) */}
