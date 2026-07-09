@@ -463,38 +463,6 @@ export default function SessionScreen() {
               />
             </View>
 
-            {/* Template selector */}
-            <View style={styles.templatePanel}>
-              <Text style={styles.templateTitle}>📚 Output Format</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.templateRow}>
-                  {(Object.entries(TEMPLATES) as [TemplateId, typeof TEMPLATES[TemplateId]][]).map(
-                    ([id, tmpl]) => (
-                      <TouchableOpacity
-                        key={id}
-                        style={[
-                          styles.templateChip,
-                          templateId === id && styles.templateChipActive,
-                        ]}
-                        onPress={() => setTemplateId(id)}
-                        id={`template-${id}`}
-                      >
-                        <Text style={styles.templateChipIcon}>{tmpl.icon}</Text>
-                        <Text
-                          style={[
-                            styles.templateChipLabel,
-                            templateId === id && styles.templateChipLabelActive,
-                          ]}
-                        >
-                          {tmpl.label}
-                        </Text>
-                      </TouchableOpacity>
-                    )
-                  )}
-                </View>
-              </ScrollView>
-            </View>
-
             {/* Generate Button */}
             <TouchableOpacity
               style={[styles.stopBtn, isGenerating && styles.stopBtnDisabled]}
