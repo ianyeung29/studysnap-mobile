@@ -1,5 +1,5 @@
 // app/processing.tsx — Processing screen with step-by-step status
-import { View, Text, StyleSheet, Alert, KeyboardAvoidingView, Platform, TextInput, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Alert, KeyboardAvoidingView, Platform, TextInput, TouchableOpacity, ActivityIndicator, Keyboard, TouchableWithoutFeedback } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -308,41 +308,48 @@ export default function ProcessingScreen() {
   if (isReviewing) {
     return (
       <SafeAreaView style={styles.safe}>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          <View style={styles.reviewContainer}>
-            <View style={styles.reviewHeader}>
-              <Text style={styles.reviewTitle}>📝 Review AI Notes Draft</Text>
-              <Text style={styles.reviewSub}>
-                Fix any typos or spelling errors before generating your final study pack.
-              </Text>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
+            <View style={styles.reviewContainer}>
+              <View style={styles.reviewHeader}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.xs }}>
+                  <Text style={styles.reviewTitle}>📝 Review AI Notes Draft</Text>
+                  <TouchableOpacity onPress={Keyboard.dismiss} style={styles.dismissKeyboardBtn}>
+                    <Text style={styles.dismissKeyboardText}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.reviewSub}>
+                  Fix any typos or spelling errors before generating your final study pack.
+                </Text>
+              </View>
+
+              <TextInput
+                style={styles.draftArea}
+                value={combinedDraft}
+                onChangeText={setCombinedDraft}
+                multiline
+                textAlignVertical="top"
+                placeholder="Your combined lecture notes will appear here..."
+                placeholderTextColor={Colors.textMuted}
+              />
+
+              <TouchableOpacity
+                style={[styles.compileBtn, isGenerating && styles.compileBtnDisabled]}
+                onPress={handleCompileFinal}
+                disabled={isGenerating}
+              >
+                {isGenerating ? (
+                  <ActivityIndicator color={Colors.white} size="small" />
+                ) : (
+                  <Text style={styles.compileBtnText}>✨ Compile Study Pack</Text>
+                )}
+              </TouchableOpacity>
             </View>
-
-            <TextInput
-              style={styles.draftArea}
-              value={combinedDraft}
-              onChangeText={setCombinedDraft}
-              multiline
-              textAlignVertical="top"
-              placeholder="Your combined lecture notes will appear here..."
-              placeholderTextColor={Colors.textMuted}
-            />
-
-            <TouchableOpacity
-              style={[styles.compileBtn, isGenerating && styles.compileBtnDisabled]}
-              onPress={handleCompileFinal}
-              disabled={isGenerating}
-            >
-              {isGenerating ? (
-                <ActivityIndicator color={Colors.white} size="small" />
-              ) : (
-                <Text style={styles.compileBtnText}>✨ Compile Study Pack</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
       </SafeAreaView>
     );
   }
@@ -466,6 +473,19 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
     lineHeight: 18,
+  },
+  dismissKeyboardBtn: {
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  dismissKeyboardText: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    color: Colors.accent3,
   },
   draftArea: {
     flex: 1,
