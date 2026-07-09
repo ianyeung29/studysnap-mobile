@@ -60,6 +60,18 @@ export default function HomeScreen() {
     checkOnboarding();
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      loadSessions().then((s: Session[]) => {
+        setSessions(s);
+        setLoading(false);
+      });
+      subscriptionService.getEntitlement().then((e) => {
+        setIsPremium(e.isActive);
+      });
+    }, [])
+  );
+
   if (isCheckingOnboarding) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.bgPrimary, justifyContent: "center", alignItems: "center" }}>
@@ -141,17 +153,7 @@ export default function HomeScreen() {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      loadSessions().then((s: Session[]) => {
-        setSessions(s);
-        setLoading(false);
-      });
-      subscriptionService.getEntitlement().then((e) => {
-        setIsPremium(e.isActive);
-      });
-    }, [])
-  );
+
 
   const displayedSessions = sessions.slice(0, 5);
 
