@@ -61,7 +61,7 @@ export async function trackEvent(eventName: string, metadata?: Record<string, an
 }
 
 // Early client-side warnings to block calls locally if quota exceeded
-export async function checkLocalDailyLimit(): Promise<{ allowed: boolean; count: number }> {
+export async function checkLocalDailyLimit(): Promise<{ allowed: boolean; count: number; limit: number }> {
   try {
     const today = new Date().toISOString().split("T")[0];
     const savedDate = await AsyncStorage.getItem("limit_date");
@@ -72,15 +72,19 @@ export async function checkLocalDailyLimit(): Promise<{ allowed: boolean; count:
       count = parseInt(savedCount, 10);
     }
 
-    // Daily limit
-    const DAILY_BETA_LIMIT = 5;
+    // Query premium entitlement
+    const isPremiumVal = await AsyncStorage.getItem("studysnap_premium_entitlement");
+    const isPremium = isPremiumVal === "true";
 
-    if (count >= DAILY_BETA_LIMIT) {
-      return { allowed: false, count };
+    // Daily limit: 100 for premium, 25 for free
+    const limit = isPremium ? 100 : 25;
+
+    if (count >= limit) {
+      return { allowed: false, count, limit };
     }
-    return { allowed: true, count };
+    return { allowed: true, count, limit };
   } catch (err) {
-    return { allowed: true, count: 0 };
+    return { allowed: true, count: 0, limit: 25 };
   }
 }
 

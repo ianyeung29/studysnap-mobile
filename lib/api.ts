@@ -2,6 +2,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { Highlight } from "./storage";
 import { getAnonymousInstallId } from "./analytics";
+import { subscriptionService } from "./subscription";
 
 // ─── CONFIG ──────────────────────────────────────────────────
 // During development: set this to your computer's local IP
@@ -122,13 +123,15 @@ export async function summarize(
   isMaster: boolean = false
 ): Promise<{ title: string; content: string; course?: string; highlights?: Highlight[] }> {
   const userId = await getAnonymousInstallId();
+  const entitlement = await subscriptionService.getEntitlement();
+  const isPremium = entitlement.isActive;
   const res = await loggedFetch(`${API_BASE_URL}/api/summarize`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Bypass-Tunnel-Reminder": "true",
     },
-    body: JSON.stringify({ notes, templateId, isMaster, userId }),
+    body: JSON.stringify({ notes, templateId, isMaster, userId, isPremium }),
   });
 
   if (!res.ok) {
@@ -153,13 +156,15 @@ export async function explainConcept(
   userAnswer: string = ""
 ): Promise<string> {
   const userId = await getAnonymousInstallId();
+  const entitlement = await subscriptionService.getEntitlement();
+  const isPremium = entitlement.isActive;
   const res = await loggedFetch(`${API_BASE_URL}/api/explain`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Bypass-Tunnel-Reminder": "true",
     },
-    body: JSON.stringify({ concept, context, mode, userAnswer, userId }),
+    body: JSON.stringify({ concept, context, mode, userAnswer, userId, isPremium }),
   });
 
   if (!res.ok) {

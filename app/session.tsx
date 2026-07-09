@@ -291,7 +291,7 @@ export default function SessionScreen() {
     if (!limitCheck.allowed) {
       Alert.alert(
         "Daily Limit Reached",
-        "You have reached your daily allowance of 5 generated study guides/quizzes in the beta. Limits reset tomorrow!",
+        `You have reached your daily allowance of ${limitCheck.limit} generations. Limits reset tomorrow!`,
         [{ text: "OK" }]
       );
       return;
