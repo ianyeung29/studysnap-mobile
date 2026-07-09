@@ -1135,7 +1135,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: Spacing.sm,
+    paddingVertical: 12,
     paddingRight: Spacing.md,
   },
   subTitleSection: {
@@ -1149,14 +1149,14 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   subName: {
-    fontSize: FontSize.xs,
+    fontSize: FontSize.sm,
     fontWeight: FontWeight.bold,
     color: Colors.textSecondary,
   },
   subCount: {
-    fontSize: 9,
+    fontSize: 11,
     color: Colors.textMuted,
-    marginTop: 1,
+    marginTop: 2,
   },
   sessionsSublist: {
     paddingLeft: Spacing.md,
@@ -1169,7 +1169,7 @@ const styles = StyleSheet.create({
   sessionItemRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: Spacing.sm,
+    paddingVertical: 10,
     paddingRight: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.04)",
@@ -1182,12 +1182,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sessionItemTitle: {
-    fontSize: FontSize.xs,
+    fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold,
     color: Colors.textPrimary,
   },
   sessionItemDate: {
-    fontSize: 8,
+    fontSize: 10,
     color: Colors.textMuted,
     marginTop: 2,
   },
