@@ -341,16 +341,6 @@ export default function ProcessingScreen() {
                 </Text>
               </View>
 
-              <TextInput
-                style={styles.draftArea}
-                value={combinedDraft}
-                onChangeText={setCombinedDraft}
-                multiline
-                textAlignVertical="top"
-                placeholder="Your combined lecture notes will appear here..."
-                placeholderTextColor={Colors.textMuted}
-              />
-
               <TouchableOpacity
                 style={[styles.compileBtn, isGenerating && styles.compileBtnDisabled]}
                 onPress={handleCompileFinal}
@@ -362,6 +352,16 @@ export default function ProcessingScreen() {
                   <Text style={styles.compileBtnText}>✨ Compile Study Pack</Text>
                 )}
               </TouchableOpacity>
+
+              <TextInput
+                style={styles.draftArea}
+                value={combinedDraft}
+                onChangeText={setCombinedDraft}
+                multiline
+                textAlignVertical="top"
+                placeholder="Your combined lecture notes will appear here..."
+                placeholderTextColor={Colors.textMuted}
+              />
             </View>
           </KeyboardAvoidingView>
         </TouchableWithoutFeedback>
