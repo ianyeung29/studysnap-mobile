@@ -116,7 +116,8 @@ export async function extractImageText(imageUri: string): Promise<string> {
 // ─── Summarize ────────────────────────────────────────────────
 export async function summarize(
   notes: string,
-  templateId: string
+  templateId: string,
+  isMaster: boolean = false
 ): Promise<{ title: string; content: string; course?: string }> {
   const res = await loggedFetch(`${API_BASE_URL}/api/summarize`, {
     method: "POST",
@@ -124,7 +125,7 @@ export async function summarize(
       "Content-Type": "application/json",
       "Bypass-Tunnel-Reminder": "true",
     },
-    body: JSON.stringify({ notes, templateId }),
+    body: JSON.stringify({ notes, templateId, isMaster }),
   });
 
   if (!res.ok) {

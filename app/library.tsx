@@ -116,7 +116,7 @@ Synthesize major linkages, transitions, and connections between these lectures t
 Here are the lecture contents to compile:
 ${combinedTexts}`;
 
-      const result = await summarize(promptInput, "exam-prep");
+      const result = await summarize(promptInput, "exam-prep", true);
 
       const masterSession: Session = {
         id: `master-${courseName.toLowerCase().replace(/[^a-z0-9]/g, "")}-${Date.now()}`,
