@@ -14,12 +14,12 @@ const API_KEYS = {
 export interface PremiumEntitlement {
   isActive: boolean;
   expirationDate?: string;
-  planId?: "monthly" | "yearly";
+  planId?: "monthly" | "quarterly" | "yearly";
 }
 
 export interface SubscriptionService {
   getEntitlement(): Promise<PremiumEntitlement>;
-  purchase(planId: "monthly" | "yearly"): Promise<PremiumEntitlement>;
+  purchase(planId: "monthly" | "quarterly" | "yearly"): Promise<PremiumEntitlement>;
   restorePurchases(): Promise<PremiumEntitlement>;
   cancelSubscription(): Promise<PremiumEntitlement>;
 }
@@ -51,12 +51,14 @@ class MockSubscriptionService implements SubscriptionService {
     }
   }
 
-  async purchase(planId: "monthly" | "yearly"): Promise<PremiumEntitlement> {
+  async purchase(planId: "monthly" | "quarterly" | "yearly"): Promise<PremiumEntitlement> {
     try {
       const expiry = new Date();
       if (planId === "yearly") {
         // 7 days free trial, then active for 1 year
         expiry.setDate(expiry.getDate() + 365 + 7);
+      } else if (planId === "quarterly") {
+        expiry.setMonth(expiry.getMonth() + 3);
       } else {
         expiry.setMonth(expiry.getMonth() + 1);
       }
@@ -130,7 +132,8 @@ class RevenueCatSubscriptionService implements SubscriptionService {
         return {
           isActive: activeEntitlement.isActive,
           expirationDate: activeEntitlement.expirationDate || undefined,
-          planId: activeEntitlement.productIdentifier.toLowerCase().includes("yearly") ? "yearly" : "monthly",
+          planId: activeEntitlement.productIdentifier.toLowerCase().includes("yearly") ? "yearly" :
+                  activeEntitlement.productIdentifier.toLowerCase().includes("quarterly") ? "quarterly" : "monthly",
         };
       }
       return { isActive: false };
@@ -140,7 +143,7 @@ class RevenueCatSubscriptionService implements SubscriptionService {
     }
   }
 
-  async purchase(planId: "monthly" | "yearly"): Promise<PremiumEntitlement> {
+  async purchase(planId: "monthly" | "quarterly" | "yearly"): Promise<PremiumEntitlement> {
     try {
       const isConfigured = await Purchases.isConfigured();
       if (!isConfigured) {
@@ -149,9 +152,9 @@ class RevenueCatSubscriptionService implements SubscriptionService {
       // Fetch offerings
       const offerings = await Purchases.getOfferings();
       if (offerings.current !== null) {
-        const pkg = planId === "yearly" 
-          ? offerings.current.annual 
-          : offerings.current.monthly;
+        const pkg = 
+          planId === "yearly" ? offerings.current.annual :
+          planId === "quarterly" ? offerings.current.threeMonth : offerings.current.monthly;
         
         if (pkg) {
           const { customerInfo } = await Purchases.purchasePackage(pkg);
@@ -187,7 +190,8 @@ class RevenueCatSubscriptionService implements SubscriptionService {
         return {
           isActive: activeEntitlement.isActive,
           expirationDate: activeEntitlement.expirationDate || undefined,
-          planId: activeEntitlement.productIdentifier.toLowerCase().includes("yearly") ? "yearly" : "monthly",
+          planId: activeEntitlement.productIdentifier.toLowerCase().includes("yearly") ? "yearly" :
+                  activeEntitlement.productIdentifier.toLowerCase().includes("quarterly") ? "quarterly" : "monthly",
         };
       }
       throw new Error("No previous purchases found to restore.");
