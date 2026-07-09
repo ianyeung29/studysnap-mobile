@@ -21,11 +21,18 @@ import { TEMPLATES } from "@/lib/templates";
 import { subscriptionService } from "@/lib/subscription";
 import SubscriptionPaywall from "@/components/SubscriptionPaywall";
 import BottomNav from "@/components/BottomNav";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Feather } from "@expo/vector-icons";
 
 export default function HomeScreen() {
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Onboarding States
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [currentSlide, setCurrentSlide] = useState(0);
 
   // Feedback Modal States
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
@@ -35,6 +42,30 @@ export default function HomeScreen() {
   // Premium / Subscription Paywall States
   const [isPremium, setIsPremium] = useState(false);
   const [paywallVisible, setPaywallVisible] = useState(false);
+
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      try {
+        const value = await AsyncStorage.getItem("has_completed_onboarding_v1");
+        if (value !== "true") {
+          setShowOnboarding(true);
+        }
+      } catch (err) {
+        console.error("Error reading onboarding storage", err);
+      } finally {
+        setIsCheckingOnboarding(false);
+      }
+    };
+    checkOnboarding();
+  }, []);
+
+  if (isCheckingOnboarding) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.bgPrimary, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator color={Colors.accent2} size="large" />
+      </View>
+    );
+  }
 
   const handleSendFeedback = () => {
     if (!feedbackText.trim()) {
@@ -62,6 +93,15 @@ export default function HomeScreen() {
         );
       }
     });
+  };
+
+  const handleCompleteOnboarding = async () => {
+    try {
+      await AsyncStorage.setItem("has_completed_onboarding_v1", "true");
+      setShowOnboarding(false);
+    } catch (err) {
+      console.error("Error writing onboarding completion", err);
+    }
   };
 
   useFocusEffect(
@@ -293,6 +333,118 @@ export default function HomeScreen() {
         </Text>
       </ScrollView>
 
+      {/* Onboarding Modal */}
+      <Modal
+        visible={showOnboarding}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={handleCompleteOnboarding}
+      >
+        <SafeAreaView style={styles.onboardingContainer}>
+          {/* Top Skip Button */}
+          {currentSlide < 2 && (
+            <TouchableOpacity
+              style={styles.onboardingSkipBtn}
+              onPress={handleCompleteOnboarding}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.onboardingSkipText}>Skip</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Onboarding Slide Cards */}
+          <View style={styles.onboardingSlideWrapper}>
+            {currentSlide === 0 && (
+              <View style={styles.onboardingCard}>
+                <View style={styles.onboardingIconContainer}>
+                  <Feather name="zap" size={64} color={Colors.accent3} />
+                </View>
+                <Text style={styles.onboardingTitle}>Welcome to StudySnap</Text>
+                <Text style={styles.onboardingDescription}>
+                  Turn lectures into study materials.
+                </Text>
+              </View>
+            )}
+
+            {currentSlide === 1 && (
+              <View style={styles.onboardingCard}>
+                <View style={styles.onboardingIconContainer}>
+                  <View style={{ flexDirection: "row", gap: Spacing.md, alignItems: "center", marginBottom: Spacing.md }}>
+                    <Feather name="mic" size={48} color={Colors.accent2} />
+                    <Feather name="plus" size={24} color={Colors.textMuted} />
+                    <Feather name="camera" size={48} color={Colors.gradientEnd} />
+                  </View>
+                </View>
+                <Text style={styles.onboardingTitle}>Capture Audio + Visual Context</Text>
+                <Text style={styles.onboardingDescription}>
+                  Record your lecture and snap the board, textbook, or handwritten notes.
+                </Text>
+              </View>
+            )}
+
+            {currentSlide === 2 && (
+              <View style={styles.onboardingCard}>
+                <View style={styles.onboardingIconContainer}>
+                  <Feather name="book-open" size={64} color={Colors.success} />
+                </View>
+                <Text style={styles.onboardingTitle}>Review, Practice, Remember</Text>
+                <Text style={styles.onboardingDescription}>
+                  Generate study guides, flashcards, quizzes, and reopen them anytime.
+                </Text>
+                <Text style={styles.onboardingPrivacyFooter}>
+                  🔒 You stay in control of your recordings, photos, and generated materials.
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Bottom Indicators & Navigation Row */}
+          <View style={styles.onboardingFooter}>
+            {/* Back Button */}
+            <TouchableOpacity
+              style={[styles.onboardingNavBtn, currentSlide === 0 && { opacity: 0 }]}
+              disabled={currentSlide === 0}
+              onPress={() => setCurrentSlide((prev) => Math.max(0, prev - 1))}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.onboardingNavText}>Back</Text>
+            </TouchableOpacity>
+
+            {/* Dots Indicator */}
+            <View style={styles.onboardingDotsRow}>
+              {[0, 1, 2].map((slide) => (
+                <View
+                  key={slide}
+                  style={[
+                    styles.onboardingDot,
+                    currentSlide === slide && styles.onboardingDotActive,
+                  ]}
+                />
+              ))}
+            </View>
+
+            {/* Next / Start Button */}
+            {currentSlide < 2 ? (
+              <TouchableOpacity
+                style={styles.onboardingNavBtn}
+                onPress={() => setCurrentSlide((prev) => Math.min(2, prev + 1))}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.onboardingNavText}>Next</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.onboardingStartBtn}
+                onPress={handleCompleteOnboarding}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.onboardingStartBtnText}>Start Studying</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </SafeAreaView>
+      </Modal>
+
       <SubscriptionPaywall
         visible={paywallVisible}
         onClose={() => setPaywallVisible(false)}
@@ -311,6 +463,113 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bgPrimary },
+  
+  // Onboarding Styles
+  onboardingContainer: {
+    flex: 1,
+    backgroundColor: Colors.bgPrimary,
+    justifyContent: "space-between",
+    paddingVertical: Spacing.xl,
+  },
+  onboardingSkipBtn: {
+    alignSelf: "flex-end",
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+  },
+  onboardingSkipText: {
+    color: Colors.textSecondary,
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.semibold,
+  },
+  onboardingSlideWrapper: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing.xl,
+  },
+  onboardingCard: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+  },
+  onboardingIconContainer: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: "rgba(124, 58, 237, 0.06)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.xl,
+    borderWidth: 1,
+    borderColor: "rgba(124, 58, 237, 0.12)",
+  },
+  onboardingTitle: {
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.black,
+    color: Colors.textPrimary,
+    textAlign: "center",
+    marginBottom: Spacing.md,
+  },
+  onboardingDescription: {
+    fontSize: FontSize.base,
+    color: Colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 24,
+    paddingHorizontal: Spacing.md,
+  },
+  onboardingPrivacyFooter: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    textAlign: "center",
+    marginTop: Spacing.xl,
+    lineHeight: 18,
+  },
+  onboardingFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: Spacing.xl,
+    height: 60,
+  },
+  onboardingNavBtn: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  onboardingNavText: {
+    color: Colors.textSecondary,
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+  },
+  onboardingDotsRow: {
+    flexDirection: "row",
+    gap: Spacing.xs,
+  },
+  onboardingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.border,
+  },
+  onboardingDotActive: {
+    width: 20,
+    backgroundColor: Colors.accent3,
+  },
+  onboardingStartBtn: {
+    backgroundColor: Colors.accent1,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 12,
+    borderRadius: Radius.md,
+    shadowColor: Colors.accent1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  onboardingStartBtnText: {
+    color: Colors.white,
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+  },
   scroll: { flex: 1 },
   content: { padding: Spacing.lg, paddingBottom: 110 },
 
