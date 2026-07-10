@@ -253,10 +253,12 @@ export default function SessionScreen() {
           )
         );
       })
-      .catch(() => {
+      .catch((err: any) => {
+        console.error("[TakePhoto OCR Error]", err);
+        Alert.alert("Text Extraction Error", err.message || String(err));
         setPhotos((prev) =>
           prev.map((p) =>
-            p.uri === uri ? { ...p, processing: false, error: "Failed to read photo" } : p
+            p.uri === uri ? { ...p, processing: false, error: err.message || "Failed to read photo" } : p
           )
         );
       });
@@ -316,10 +318,12 @@ export default function SessionScreen() {
             )
           );
         })
-        .catch(() => {
+        .catch((err: any) => {
+          console.error("[PickPhoto OCR Error]", err);
+          Alert.alert("Text Extraction Error", err.message || String(err));
           setPhotos((prev) =>
             prev.map((p) =>
-              p.uri === uri ? { ...p, processing: false, error: "Failed to read photo" } : p
+              p.uri === uri ? { ...p, processing: false, error: err.message || "Failed to read photo" } : p
             )
           );
         });
