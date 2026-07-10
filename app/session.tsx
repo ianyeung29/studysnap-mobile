@@ -275,6 +275,15 @@ export default function SessionScreen() {
       return;
     }
 
+    const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!granted) {
+      Alert.alert(
+        "Photo Library Access Required",
+        "StudySnap needs permission to access your photo library to load notes."
+      );
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       quality: 0.85,
