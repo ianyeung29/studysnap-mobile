@@ -15,7 +15,7 @@
     "scheme": "studysnap",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.studysnap.app",
+      "bundleIdentifier": "com.asmrforall1999.studysnap",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "StudySnap needs your microphone to record lectures so you can generate study materials.",
         "NSCameraUsageDescription": "StudySnap needs your camera to photograph whiteboards and handwritten notes.",
@@ -27,7 +27,7 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#0a0a0f"
       },
-      "package": "com.studysnap.app",
+      "package": "com.asmrforall1999.studysnap",
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
@@ -65,6 +65,7 @@
       "eas": {
         "projectId": "e23d7d46-8502-4be2-b31a-017f0eabc9a4"
       }
-    }
+    },
+    "owner": "asmrforall1999"
   }
 }
