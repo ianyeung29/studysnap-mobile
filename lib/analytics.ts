@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import { getVerifiedToken } from "./supabase";
 
 const API_BASE = "https://studysnap-backend-kittycatty.vercel.app"; // Fallback URL or configure accordingly
 
@@ -30,9 +31,15 @@ export async function trackEvent(eventName: string, metadata?: Record<string, an
     const localHost = Platform.OS === "android" ? "http://10.0.2.2:3000" : "http://localhost:3000";
     const url = `${localHost}/api/analytics`;
 
+    const token = await getVerifiedToken();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+    };
+
     fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         userId,
         eventName,
@@ -45,7 +52,7 @@ export async function trackEvent(eventName: string, metadata?: Record<string, an
       const remoteUrl = `https://studysnap-backend-kittycatty.vercel.app/api/analytics`;
       fetch(remoteUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           userId,
           eventName,

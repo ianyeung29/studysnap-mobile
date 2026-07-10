@@ -25,6 +25,8 @@ import { setTempExtraNotes } from "@/lib/draftCache";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
 import { trackEvent, checkLocalDailyLimit, incrementLocalDailyLimit } from "@/lib/analytics";
+import AuthSheet from "@/components/AuthSheet";
+import { getVerifiedToken } from "@/lib/supabase";
 
 interface PhotoItem {
   uri: string;
@@ -63,7 +65,11 @@ export default function SessionScreen() {
   // Privacy Policy States
   const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
 
-  // ── Start recording on mount (or load preloaded audio) ────────
+  // Auth States
+  const [authSheetVisible, setAuthSheetVisible] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // ── Start recording on mount with Authentication gate ────────
   useEffect(() => {
     const checkPrivacy = async () => {
       try {
@@ -79,7 +85,19 @@ export default function SessionScreen() {
         startSessionFlow(); // Fallback to avoid blocking user if storage errors
       }
     };
-    checkPrivacy();
+
+    const checkAuthAndStart = async () => {
+      const token = await getVerifiedToken();
+      if (!token) {
+        setAuthSheetVisible(true);
+        setStatus("stopped");
+      } else {
+        setIsAuthenticated(true);
+        checkPrivacy();
+      }
+    };
+    
+    checkAuthAndStart();
 
     return () => {
       stopTimer();
@@ -88,6 +106,24 @@ export default function SessionScreen() {
       }
     };
   }, [recorder, params.preloadedAudioUri, params.skipAudio]);
+
+  const handleAuthSuccess = (token: string) => {
+    setAuthSheetVisible(false);
+    setIsAuthenticated(true);
+    
+    AsyncStorage.getItem("has_accepted_privacy_v1").then((accepted) => {
+      if (accepted !== "true") {
+        setPrivacyModalVisible(true);
+      } else {
+        startSessionFlow();
+      }
+    });
+  };
+
+  const handleAuthClose = () => {
+    setAuthSheetVisible(false);
+    router.back();
+  };
 
   const startSessionFlow = () => {
     trackEvent("start_session_clicked");
@@ -361,6 +397,13 @@ export default function SessionScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["bottom"]}>
+      {/* Auth Modal Sheet */}
+      <AuthSheet
+        visible={authSheetVisible}
+        onClose={handleAuthClose}
+        onSuccess={handleAuthSuccess}
+      />
+
       {/* Privacy Consent Modal */}
       <Modal
         visible={privacyModalVisible}

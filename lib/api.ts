@@ -3,6 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Highlight } from "./storage";
 import { getAnonymousInstallId } from "./analytics";
 import { subscriptionService } from "./subscription";
+import { getVerifiedToken } from "./supabase";
 
 // ─── CONFIG ──────────────────────────────────────────────────
 // During development: set this to your computer's local IP
@@ -10,6 +11,15 @@ import { subscriptionService } from "./subscription";
 // In production: set to your deployed Vercel URL
 // e.g. "https://studysnap.vercel.app"
 export const API_BASE_URL = "https://studysnap-backend-kittycatty.vercel.app";
+
+async function getAuthHeaders(isJson: boolean = false): Promise<Record<string, string>> {
+  const token = await getVerifiedToken();
+  return {
+    "Bypass-Tunnel-Reminder": "true",
+    ...(isJson ? { "Content-Type": "application/json" } : {}),
+    ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+  };
+}
 
 // Helper wrapper to log fetch errors
 async function loggedFetch(
@@ -24,8 +34,14 @@ async function loggedFetch(
     console.log(
       `[API Response] Received: ${res.status} ${res.statusText} (${duration}ms)`
     );
+    if (res.status === 401) {
+      throw new Error("UNAUTHORIZED_SESSION");
+    }
     return res;
   } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED_SESSION") {
+      throw err;
+    }
     console.error(`[API Network Error] URL: ${url}`, {
       message: err instanceof Error ? err.message : String(err),
       error: err,
@@ -66,11 +82,10 @@ export async function transcribeAudio(audioUri: string, durationSeconds: number)
   formData.append("isPremium", String(isPremium));
   formData.append("durationSeconds", String(durationSeconds));
 
+  const headers = await getAuthHeaders();
   const res = await loggedFetch(`${API_BASE_URL}/api/transcribe`, {
     method: "POST",
-    headers: {
-      "Bypass-Tunnel-Reminder": "true",
-    },
+    headers,
     body: formData,
   });
 
@@ -113,11 +128,10 @@ export async function extractImageText(imageUri: string, photoCount: number): Pr
   formData.append("isPremium", String(isPremium));
   formData.append("photoCount", String(photoCount));
 
+  const headers = await getAuthHeaders();
   const res = await loggedFetch(`${API_BASE_URL}/api/extract-image`, {
     method: "POST",
-    headers: {
-      "Bypass-Tunnel-Reminder": "true",
-    },
+    headers,
     body: formData,
   });
 
@@ -139,12 +153,10 @@ export async function summarize(
   const userId = await getAnonymousInstallId();
   const entitlement = await subscriptionService.getEntitlement();
   const isPremium = entitlement.isActive;
+  const headers = await getAuthHeaders(true);
   const res = await loggedFetch(`${API_BASE_URL}/api/summarize`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Bypass-Tunnel-Reminder": "true",
-    },
+    headers,
     body: JSON.stringify({ notes, templateId, isMaster, userId, isPremium }),
   });
 
@@ -172,12 +184,10 @@ export async function explainConcept(
   const userId = await getAnonymousInstallId();
   const entitlement = await subscriptionService.getEntitlement();
   const isPremium = entitlement.isActive;
+  const headers = await getAuthHeaders(true);
   const res = await loggedFetch(`${API_BASE_URL}/api/explain`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Bypass-Tunnel-Reminder": "true",
-    },
+    headers,
     body: JSON.stringify({ concept, context, mode, userAnswer, userId, isPremium }),
   });
 

@@ -24,6 +24,9 @@ import BottomNav from "@/components/BottomNav";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
 import { trackEvent } from "@/lib/analytics";
+import { supabase } from "@/lib/supabase";
+import AuthSheet from "@/components/AuthSheet";
+import { API_BASE_URL } from "@/lib/api";
 export default function HomeScreen() {
   const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -39,6 +42,10 @@ export default function HomeScreen() {
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackType, setFeedbackType] = useState<"Suggestion" | "Problem">("Suggestion");
   const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
+
+  // Auth States
+  const [authUser, setAuthUser] = useState<any>(null);
+  const [authSheetVisible, setAuthSheetVisible] = useState(false);
 
   // Premium / Subscription Paywall States
   const [isPremium, setIsPremium] = useState(false);
@@ -68,6 +75,9 @@ export default function HomeScreen() {
       });
       subscriptionService.getEntitlement().then((e) => {
         setIsPremium(e.isActive);
+      });
+      supabase.auth.getSession().then(({ data }) => {
+        setAuthUser(data.session?.user || null);
       });
     }, [])
   );
@@ -136,6 +146,80 @@ export default function HomeScreen() {
               setShowOnboarding(true);
             } catch (err) {
               Alert.alert("Error", "Could not delete local data. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      setAuthUser(null);
+      setSettingsModalVisible(false);
+      Alert.alert("Signed Out", "You have been successfully signed out.");
+      trackEvent("auth_signout");
+    } catch (err) {
+      Alert.alert("Error", "Failed to sign out. Please try again.");
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Anonymize & Delete Account",
+      "Are you sure you want to delete your account? This will anonymize your email on our servers, sign you out, and permanently delete all your local study sessions. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Yes, Delete Account",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setSettingsModalVisible(false);
+              setLoading(true);
+
+              // 1. Send deletion request to backend
+              const { data: sessionData } = await supabase.auth.getSession();
+              const token = sessionData.session?.access_token;
+
+              if (token) {
+                const response = await fetch(`${API_BASE_URL}/api/auth/delete-account`, {
+                  method: "POST",
+                  headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                  },
+                });
+
+                if (!response.ok) {
+                  const errJson = await response.json().catch(() => ({}));
+                  throw new Error(errJson.error || "Server deletion failed.");
+                }
+              }
+
+              // 2. Clear local storage data (like handleDeleteAllLocalData)
+              const keys = [
+                "sessions",
+                "has_completed_onboarding_v1",
+                "has_accepted_privacy_v1",
+                "privacy_accepted_at",
+                "privacy_policy_version"
+              ];
+              await Promise.all(keys.map((k) => AsyncStorage.removeItem(k)));
+              await supabase.auth.signOut();
+
+              setSessions([]);
+              setAuthUser(null);
+              trackEvent("account_deleted");
+
+              Alert.alert("Account Deleted", "Your account and data have been successfully deleted.");
+              setShowOnboarding(true);
+            } catch (err: any) {
+              console.error("Account deletion failed:", err);
+              Alert.alert("Deletion Failed", err.message || "Could not delete account. Please try again.");
+            } finally {
+              setLoading(false);
             }
           },
         },
@@ -540,6 +624,35 @@ export default function HomeScreen() {
                 <Text style={styles.modalBtnText}>Submit Feedback</Text>
               </TouchableOpacity>
 
+              {/* Account Section */}
+              <Text style={styles.modalInputLabel}>User Account</Text>
+              {authUser ? (
+                <View style={{ marginBottom: Spacing.lg }}>
+                  <View style={styles.accountProfileCard}>
+                    <Text style={styles.accountEmailText}>📧 {authUser.email}</Text>
+                    <Text style={styles.accountStatusText}>Status: Verified Account</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.modalBtn, styles.modalBtnCancel]}
+                    onPress={handleSignOut}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.modalBtnCancelText}>Sign Out</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.modalBtn, { backgroundColor: Colors.accent2, marginBottom: Spacing.lg }]}
+                  onPress={() => {
+                    setSettingsModalVisible(false);
+                    setAuthSheetVisible(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.modalBtnText}>Sign In / Create Account</Text>
+                </TouchableOpacity>
+              )}
+
               {/* Privacy Wording Option */}
               <Text style={styles.modalInputLabel}>Legal & Privacy Policy</Text>
               <TouchableOpacity
@@ -563,6 +676,20 @@ export default function HomeScreen() {
               >
                 <Text style={styles.modalBtnText}>Delete All Local Data</Text>
               </TouchableOpacity>
+
+              {/* Delete Account (For Logged in Users) */}
+              {authUser && (
+                <View style={{ marginTop: Spacing.md }}>
+                  <Text style={styles.modalInputLabel}>Danger Zone</Text>
+                  <TouchableOpacity
+                    style={[styles.modalBtn, { backgroundColor: Colors.error }]}
+                     onPress={handleDeleteAccount}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.modalBtnText}>Delete & Anonymize Account</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </ScrollView>
           </View>
         </View>
@@ -690,6 +817,17 @@ export default function HomeScreen() {
         onPurchaseSuccess={() => {
           subscriptionService.getEntitlement().then((e) => {
             setIsPremium(e.isActive);
+          });
+        }}
+      />
+
+      <AuthSheet
+        visible={authSheetVisible}
+        onClose={() => setAuthSheetVisible(false)}
+        onSuccess={(token) => {
+          setAuthSheetVisible(false);
+          supabase.auth.getSession().then(({ data }) => {
+            setAuthUser(data.session?.user || null);
           });
         }}
       />
@@ -1224,5 +1362,23 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: FontWeight.bold,
     fontSize: FontSize.base,
+  },
+  accountProfileCard: {
+    backgroundColor: Colors.bgInput,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    gap: 4,
+  },
+  accountEmailText: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+  },
+  accountStatusText: {
+    color: Colors.textMuted,
+    fontSize: FontSize.xs,
   },
 });
