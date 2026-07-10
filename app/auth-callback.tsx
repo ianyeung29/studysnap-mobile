@@ -14,17 +14,20 @@ export default function AuthCallback() {
 
     async function handleUrl(url: string) {
       console.log("[AuthCallback] Handling URL:", url);
-      const hash = url.split("#")[1];
-      if (!hash) {
-        if (active) router.replace("/");
-        return;
-      }
-
+      
       const params: Record<string, string> = {};
-      hash.split("&").forEach((part) => {
-        const [key, val] = part.split("=");
-        if (key && val) params[key] = decodeURIComponent(val);
-      });
+      const parseParams = (str: string) => {
+        str.split("&").forEach((part) => {
+          const [key, val] = part.split("=");
+          if (key && val) params[key] = decodeURIComponent(val);
+        });
+      };
+
+      const queryPart = url.split("?")[1]?.split("#")[0];
+      if (queryPart) parseParams(queryPart);
+
+      const hashPart = url.split("#")[1];
+      if (hashPart) parseParams(hashPart);
 
       const accessToken = params["access_token"];
       const refreshToken = params["refresh_token"];
@@ -43,6 +46,12 @@ export default function AuthCallback() {
           console.error("[AuthCallback] Error setting session:", err);
           Alert.alert("Authentication Failed", err.message || "Failed to set session.");
         }
+      } else {
+        console.warn("[AuthCallback] Missing tokens in URL:", url);
+        Alert.alert(
+          "Authentication Error",
+          `Unable to complete sign-in.\n\nNo tokens were found in the redirect URL.\n\nReceived URL: ${url}\n\nParsed: ${JSON.stringify(params)}`
+        );
       }
 
       if (active) {
