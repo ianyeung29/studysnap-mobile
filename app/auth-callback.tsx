@@ -1,20 +1,79 @@
-import React, { useEffect } from "react";
-import { View, ActivityIndicator } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, ActivityIndicator, Alert, Text } from "react-native";
 import { useRouter } from "expo-router";
+import * as Linking from "expo-linking";
+import { supabase } from "@/lib/supabase";
 import { Colors } from "@/constants/theme";
 
 export default function AuthCallback() {
   const router = useRouter();
+  const [status, setStatus] = useState("Completing sign-in...");
 
   useEffect(() => {
-    // Immediately redirect back to the home screen.
-    // The AuthSheet's deep link listener will handle setting the Supabase session in parallel.
-    router.replace("/");
-  }, []);
+    let active = true;
+
+    async function handleUrl(url: string) {
+      console.log("[AuthCallback] Handling URL:", url);
+      const hash = url.split("#")[1];
+      if (!hash) {
+        if (active) router.replace("/");
+        return;
+      }
+
+      const params: Record<string, string> = {};
+      hash.split("&").forEach((part) => {
+        const [key, val] = part.split("=");
+        if (key && val) params[key] = decodeURIComponent(val);
+      });
+
+      const accessToken = params["access_token"];
+      const refreshToken = params["refresh_token"];
+
+      if (accessToken && refreshToken) {
+        try {
+          if (active) setStatus("Connecting session...");
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (error) throw error;
+          console.log("[AuthCallback] Session set successfully!");
+        } catch (err: any) {
+          console.error("[AuthCallback] Error setting session:", err);
+          Alert.alert("Authentication Failed", err.message || "Failed to set session.");
+        }
+      }
+
+      if (active) {
+        router.replace("/");
+      }
+    }
+
+    Linking.getInitialURL().then((url) => {
+      if (url && url.includes("auth-callback")) {
+        handleUrl(url);
+      } else {
+        router.replace("/");
+      }
+    });
+
+    const subscription = Linking.addEventListener("url", (event) => {
+      if (event.url && event.url.includes("auth-callback")) {
+        handleUrl(event.url);
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, [router]);
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bgPrimary, justifyContent: "center", alignItems: "center" }}>
       <ActivityIndicator size="large" color={Colors.accent2} />
+      <Text style={{ color: Colors.textMuted, marginTop: 15, fontSize: 14 }}>{status}</Text>
     </View>
   );
 }
