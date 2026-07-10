@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
 } from "react-native";
+import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
@@ -23,28 +24,78 @@ interface AuthSheetProps {
 export default function AuthSheet({ visible, onClose, onSuccess }: AuthSheetProps) {
   const [loading, setLoading] = useState(false);
 
+  React.useEffect(() => {
+    if (!visible) return;
+
+    const handleDeepLink = async (event: { url: string }) => {
+      const hash = event.url.split("#")[1];
+      if (hash) {
+        const params: Record<string, string> = {};
+        hash.split("&").forEach((part) => {
+          const [key, val] = part.split("=");
+          if (key && val) params[key] = decodeURIComponent(val);
+        });
+        
+        const accessToken = params["access_token"];
+        const refreshToken = params["refresh_token"];
+
+        if (accessToken && refreshToken) {
+          setLoading(true);
+          try {
+            const { data, error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (error) throw error;
+
+            if (data.session) {
+              trackEvent("auth_success", { method: "oauth" });
+              onSuccess(data.session.access_token);
+            }
+          } catch (err: any) {
+            console.error("Deep link session extraction failed:", err);
+            Alert.alert("Authentication Failed", err.message || "Failed to set session.");
+          } finally {
+            setLoading(false);
+          }
+        }
+      }
+    };
+
+    const subscription = Linking.addEventListener("url", handleDeepLink);
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [visible]);
+
   const handleOAuthSignIn = async (provider: "google" | "apple") => {
     setLoading(true);
     trackEvent("auth_started", { provider });
 
     try {
-      // In production, signInWithOAuth configures AuthSession deep links back to the app.
-      // E.g., redirectUrl: Linking.createURL("/auth/callback")
+      const redirectUrl = Linking.createURL("auth-callback");
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          skipBrowserRedirect: false,
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
         },
       });
 
       if (error) throw error;
 
-      // Note: Full OAuth flow completes via browser redirect and triggers auth state change.
-      // For beta testing / standalone builds:
-      Alert.alert(
-        "OAuth Triggered",
-        `Signing in with ${provider === "google" ? "Google" : "Apple"}... Please complete the flow in the browser.`
-      );
+      if (data?.url) {
+        await Linking.openURL(data.url);
+      } else {
+        throw new Error("No authentication URL returned.");
+      }
     } catch (err: any) {
       console.error(`${provider} Sign-in failed:`, err);
       Alert.alert("Authentication Failed", err.message || "An unexpected error occurred.");
