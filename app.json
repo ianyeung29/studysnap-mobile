@@ -34,8 +34,7 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.MODIFY_AUDIO_SETTINGS"
-      ],
-      "usesCleartextTraffic": true
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -55,7 +54,8 @@
           "photosPermission": "StudySnap needs photo library access to select images of your notes."
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
