@@ -96,27 +96,18 @@ export default function HomeScreen() {
       return;
     }
 
-    const email = "asmrforall1999@gmail.com";
-    const subject = encodeURIComponent(`[StudySnap Mobile] ${feedbackType}`);
-    const body = encodeURIComponent(
-      `Hey Admin,\n\nHere is my ${feedbackType.toLowerCase()}:\n\n${feedbackText}\n\nDevice OS: ${Platform.OS}\nDate: ${new Date().toLocaleDateString()}`
-    );
-
-    const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`;
-
-    Linking.canOpenURL(mailtoUrl).then((supported) => {
-      if (supported) {
-        trackEvent("feedback_submitted", { type: feedbackType });
-        Linking.openURL(mailtoUrl);
-        setSettingsModalVisible(false);
-        setFeedbackText("");
-      } else {
-        Alert.alert(
-          "Email Client Not Found",
-          `We couldn't open your native mail application. Please copy our address and send your feedback directly to: ${email}`
-        );
-      }
+    // Submit feedback directly to database telemetry
+    trackEvent("feedback_submitted", {
+      feedbackType: feedbackType,
+      feedbackContent: feedbackText,
     });
+
+    Alert.alert(
+      "Thank You!",
+      "Your feedback has been submitted directly to the development team. We appreciate your response!"
+    );
+    setSettingsModalVisible(false);
+    setFeedbackText("");
   };
 
   const handleDeleteAllLocalData = () => {
