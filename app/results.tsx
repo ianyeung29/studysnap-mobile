@@ -163,7 +163,6 @@ export default function ResultsScreen() {
       setEditableTitle(updatedSession.title);
       setEditableCourse(updatedSession.course || "General");
       setEditableParentFolder(updatedSession.parentFolder || "General Folders");
-      Alert.alert("Success", "Study materials compiled successfully!");
     } catch (err: unknown) {
       console.error("[Retry Generation Error]:", err);
       const msg = err instanceof Error ? err.message : "Connection failed.";
@@ -579,7 +578,6 @@ export default function ResultsScreen() {
         setEditableParentFolder(updatedSession.parentFolder || "General Folders");
         setHighlights(newArt.highlights || []);
         setSourceChanged(false);
-        Alert.alert("Success", `Converted to ${TEMPLATES[newTemplateId].label}!`);
       } catch (e) {
         Alert.alert("Regeneration failed", "Could not convert to the new format.");
       } finally {
@@ -1173,7 +1171,7 @@ export default function ResultsScreen() {
             {isEditing ? (
               <View style={styles.contentCard}>
                 <View style={styles.contentCardHeader}>
-                  <Text style={styles.contentCardTitle}>✍️ Edit Study Summary</Text>
+                  <Text style={styles.contentCardTitle}>✍️ Edit Summary</Text>
                   <View style={styles.headerActionsToolbar}>
                     <TouchableOpacity
                       style={[styles.headerTextBtn, styles.headerTextBtnCancel]}
@@ -1228,18 +1226,15 @@ export default function ResultsScreen() {
                 
                 <View style={styles.contentCard}>
                   <View style={styles.contentCardHeader}>
-                    <Text style={styles.contentCardTitle}>📖 Study Summary</Text>
+                    <Text style={styles.contentCardTitle}>📖 Summary</Text>
                     <View style={styles.headerActionsToolbar}>
-                      {/* Focus Mode Button */}
+                      {/* Immersive Fullscreen Button */}
                       <TouchableOpacity
-                        style={[
-                          styles.headerIconBtn,
-                          focusMode && { backgroundColor: "rgba(192, 132, 252, 0.15)", borderColor: Colors.accent3 }
-                        ]}
-                        onPress={() => setFocusMode(prev => !prev)}
+                        style={styles.headerIconBtn}
+                        onPress={() => setReadingMaximized(true)}
                         activeOpacity={0.7}
                       >
-                        <Feather name={focusMode ? "eye" : "eye-off"} size={16} color={focusMode ? Colors.accent3 : Colors.textPrimary} />
+                        <Feather name="maximize-2" size={16} color={Colors.textPrimary} />
                       </TouchableOpacity>
 
                       {/* Add Highlight Button */}
