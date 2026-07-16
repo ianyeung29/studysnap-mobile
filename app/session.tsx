@@ -19,14 +19,15 @@ import * as ImagePicker from "expo-image-picker";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
 import WaveformAnimation from "@/components/WaveformAnimation";
 import { TEMPLATES, TemplateId } from "@/lib/templates";
-import { transcribeAudio, extractImageText, summarize } from "@/lib/api";
+import { transcribeAudio, extractImageText, summarize, API_BASE_URL } from "@/lib/api";
 import { addSession } from "@/lib/storage";
 import { setTempExtraNotes } from "@/lib/draftCache";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
-import { trackEvent, checkLocalDailyLimit, incrementLocalDailyLimit } from "@/lib/analytics";
+import { trackEvent, checkLocalDailyLimit, incrementLocalDailyLimit, getAnonymousInstallId } from "@/lib/analytics";
 import AuthSheet from "@/components/AuthSheet";
 import { getVerifiedToken } from "@/lib/supabase";
+import * as DocumentPicker from "expo-document-picker";
 
 interface PhotoItem {
   uri: string;
@@ -50,6 +51,9 @@ export default function SessionScreen() {
 
   // Photos state
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
+
+  // PDF state
+  const [pdfDocument, setPdfDocument] = useState<{ name: string; pages: string[]; loading: boolean } | null>(null);
 
   // Template
   const [templateId, setTemplateId] = useState<TemplateId>("study-guide");
@@ -334,6 +338,67 @@ export default function SessionScreen() {
     setPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handlePickPdf = useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "application/pdf",
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const doc = result.assets[0];
+      setPdfDocument({ name: doc.name, pages: [], loading: true });
+
+      const token = await getVerifiedToken();
+      const formData = new FormData();
+      
+      formData.append("pdf", {
+        uri: doc.uri,
+        name: doc.name,
+        type: "application/pdf",
+      } as any);
+
+      const installId = await getAnonymousInstallId();
+      formData.append("userId", installId);
+
+      const isPremiumVal = await AsyncStorage.getItem("studysnap_premium_entitlement");
+      formData.append("isPremium", String(isPremiumVal === "true"));
+
+      const response = await fetch(`${API_BASE_URL}/api/extract-pdf`, {
+        method: "POST",
+        headers: {
+          "Bypass-Tunnel-Reminder": "true",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (data.success && data.pages) {
+        setPdfDocument({
+          name: doc.name,
+          pages: data.pages,
+          loading: false,
+        });
+        trackEvent("pdf_added", { pageCount: data.pages.length });
+      } else {
+        setPdfDocument(null);
+        Alert.alert("Failed to parse PDF", data.error || "Could not parse document. Please try again.");
+      }
+    } catch (err: any) {
+      console.error("PDF upload error:", err);
+      setPdfDocument(null);
+      Alert.alert("Failed to parse PDF", "Something went wrong. Please check your internet connection.");
+    }
+  }, []);
+
+  const handleDeletePdf = useCallback(() => {
+    setPdfDocument(null);
+  }, []);
+
   const handleStopRecording = async () => {
     stopTimer();
     setStatus("stopped");
@@ -400,13 +465,14 @@ export default function SessionScreen() {
           templateId,
           course: course.trim(),
           markers: JSON.stringify(markers),
+          documentNotes: pdfDocument ? JSON.stringify(pdfDocument.pages) : "[]",
         },
       });
     } catch (e) {
       Alert.alert("Error", "Something went wrong. Please try again.");
       setIsGenerating(false);
     }
-  }, [isGenerating, photos, seconds, templateId, router, recordedAudioUri, course, extraNotes]);
+  }, [isGenerating, photos, seconds, templateId, router, recordedAudioUri, course, extraNotes, pdfDocument, markers]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["bottom"]}>
@@ -709,6 +775,51 @@ export default function SessionScreen() {
                   <Text style={styles.cameraBtnText}>From Library</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+
+            {/* PDF Slides Panel */}
+            <View style={styles.photosPanel}>
+              <View style={styles.photosPanelHeader}>
+                <Text style={styles.photosPanelTitle}>
+                  📁 Attached Lecture Slides (PDF)
+                </Text>
+              </View>
+
+              <Text style={styles.photosTip}>
+                Upload official slide deck PDFs to cross-reference with class recordings
+              </Text>
+
+              {pdfDocument ? (
+                <View style={styles.pdfCard}>
+                  <View style={styles.pdfCardInfo}>
+                    <Feather name="file-text" size={24} color={Colors.accent3} />
+                    <View style={{ marginLeft: Spacing.sm, flex: 1 }}>
+                      <Text style={styles.pdfName} numberOfLines={1}>
+                        {pdfDocument.name}
+                      </Text>
+                      <Text style={styles.pdfStatus}>
+                        {pdfDocument.loading
+                          ? "⏳ Extracting slide text pages..."
+                          : `✅ Successfully extracted ${pdfDocument.pages.length} pages`}
+                      </Text>
+                    </View>
+                  </View>
+                  {!pdfDocument.loading && (
+                    <TouchableOpacity onPress={handleDeletePdf} activeOpacity={0.7} style={{ padding: 4 }}>
+                      <Feather name="x-circle" size={20} color="#ef4444" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.pdfUploadBtn}
+                  onPress={handlePickPdf}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="upload-cloud" size={20} color={Colors.accent3} style={{ marginRight: Spacing.sm }} />
+                  <Text style={styles.pdfUploadBtnText}>Select Slide Deck PDF</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Extra notes / Study materials input */}
@@ -1026,6 +1137,49 @@ const styles = StyleSheet.create({
   },
   cameraBtnIcon: { fontSize: 18 },
   cameraBtnText: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold,
+    color: Colors.white,
+  },
+
+  // PDF Styles
+  pdfCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+  },
+  pdfCardInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  pdfName: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  pdfStatus: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  pdfUploadBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: Colors.borderAccent,
+    borderRadius: Radius.lg,
+    paddingVertical: 14,
+  },
+  pdfUploadBtnText: {
     fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold,
     color: Colors.white,

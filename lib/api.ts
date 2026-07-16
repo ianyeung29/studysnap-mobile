@@ -148,7 +148,8 @@ export async function extractImageText(imageUri: string, photoCount: number): Pr
 export async function summarize(
   notes: string,
   templateId: string,
-  isMaster: boolean = false
+  isMaster: boolean = false,
+  documentNotes?: string[]
 ): Promise<{ title: string; content: string; course?: string; highlights?: Highlight[] }> {
   const userId = await getAnonymousInstallId();
   const entitlement = await subscriptionService.getEntitlement();
@@ -157,7 +158,7 @@ export async function summarize(
   const res = await loggedFetch(`${API_BASE_URL}/api/summarize`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ notes, templateId, isMaster, userId, isPremium }),
+    body: JSON.stringify({ notes, templateId, isMaster, userId, isPremium, documentNotes }),
   });
 
   if (!res.ok) {

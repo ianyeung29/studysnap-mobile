@@ -4,12 +4,13 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors, Spacing, Radius, FontSize, FontWeight } from "@/constants/theme";
-import { transcribeAudio, summarize } from "@/lib/api";
+import { transcribeAudio, summarize, API_BASE_URL } from "@/lib/api";
 import { trackEvent, incrementLocalDailyLimit } from "@/lib/analytics";
 import { addSession } from "@/lib/storage";
 import { getTempExtraNotes } from "@/lib/draftCache";
 import WaveformAnimation from "@/components/WaveformAnimation";
 import * as FileSystem from "expo-file-system/legacy";
+import { getVerifiedToken } from "@/lib/supabase";
 
 type StepStatus = "pending" | "running" | "done" | "error" | "skipped";
 
@@ -30,6 +31,7 @@ export default function ProcessingScreen() {
     course: string;
     markers?: string;
     extraNotes?: string;
+    documentNotes?: string;
   }>();
 
   const [steps, setSteps] = useState<Step[]>([]);
@@ -47,6 +49,7 @@ export default function ProcessingScreen() {
   const photoUrisRef = useRef<string[]>([]);
   const durationSecondsRef = useRef(0);
   const templateIdRef = useRef("");
+  const documentNotesRef = useRef<string[]>([]);
 
   const updateStep = (id: string, status: StepStatus, label?: string) => {
     setSteps((prev) =>
@@ -67,6 +70,7 @@ export default function ProcessingScreen() {
     const durationSeconds = parseInt(params.durationSeconds || "0");
     const templateId = params.templateId || "study-guide";
     const extraNotes = getTempExtraNotes() || params.extraNotes || "";
+    const documentNotes: string[] = JSON.parse(params.documentNotes || "[]");
 
     // Build initial steps
     const initialSteps: Step[] = [
@@ -135,6 +139,7 @@ export default function ProcessingScreen() {
       photoUrisRef.current = photoUris;
       durationSecondsRef.current = durationSeconds;
       templateIdRef.current = templateId;
+      documentNotesRef.current = documentNotes;
 
       // 3. Combine
       updateStep("combine", "running");
@@ -221,10 +226,11 @@ export default function ProcessingScreen() {
     const photoTexts = photoTextsRef.current;
     const permanentAudioUri = permanentAudioUriRef.current;
     const audioTranscript = audioTranscriptRef.current;
+    const documentNotes = documentNotesRef.current;
 
     try {
       updateStep("generate", "running");
-      const { title, content, course: autoCourse } = await summarize(combinedDraft, templateId);
+      const { title, content, course: autoCourse } = await summarize(combinedDraft, templateId, false, documentNotes);
       updateStep("generate", "done", "Study materials ready ✓");
 
       updateStep("save", "running");
@@ -246,9 +252,43 @@ export default function ProcessingScreen() {
         photoTexts,
         isFailed: false,
         extraNotes: params.extraNotes,
+        documentNotes,
       };
       await addSession(session);
       updateStep("save", "done", "Session saved ✓");
+
+      // Sync session to database (Neon PG) in background
+      getVerifiedToken().then((token) => {
+        if (token) {
+          fetch(`${API_BASE_URL}/api/sessions`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`,
+              "Bypass-Tunnel-Reminder": "true",
+            },
+            body: JSON.stringify({
+              id: session.id,
+              title: session.title,
+              course: session.course,
+              parentFolder: "General Folders",
+              templateId: session.templateId,
+              audioUri: session.audioUri,
+              audioDuration: session.durationSeconds,
+              createdAt: session.date,
+              updatedAt: session.date,
+              artifactJson: {
+                content: session.content,
+                flashcards: [], 
+                quiz: [],
+              },
+              documentNotes: session.documentNotes,
+            }),
+          }).catch((err) => {
+            console.warn("[Cloud Sync Background Error]:", err);
+          });
+        }
+      });
 
       // Analytics cost track event
       await incrementLocalDailyLimit();
@@ -291,6 +331,7 @@ export default function ProcessingScreen() {
           photoTexts,
           isFailed: true,
           extraNotes: params.extraNotes,
+          documentNotes,
         };
         await addSession(failedSession);
       } catch (saveErr) {

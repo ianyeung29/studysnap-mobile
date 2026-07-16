@@ -10,6 +10,8 @@ import {
   Share,
   ActivityIndicator,
   Modal,
+  Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState, useCallback } from "react";
@@ -22,13 +24,19 @@ import { loadSessions, Session, addSession, formatDate, formatDuration, computeS
 import * as Speech from "expo-speech";
 import * as FileSystem from "expo-file-system/legacy";
 import { TEMPLATES, TemplateId } from "@/lib/templates";
-import { summarize, transcribeAudio } from "@/lib/api";
+import { summarize, transcribeAudio, API_BASE_URL } from "@/lib/api";
 import MarkdownText from "@/components/MarkdownText";
 import { scheduleCustomReminder } from "../lib/notifications";
 import { Feather } from "@expo/vector-icons";
 import { subscriptionService } from "@/lib/subscription";
+import { getVerifiedToken } from "@/lib/supabase";
 import SubscriptionPaywall from "@/components/SubscriptionPaywall";
 import { trackEvent } from "@/lib/analytics";
+
+interface ChatMessage {
+  sender: "user" | "assistant";
+  text: string;
+}
 
 export default function ResultsScreen() {
   const router = useRouter();
@@ -40,6 +48,12 @@ export default function ResultsScreen() {
   const [regenerating, setRegenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // AI Tutor chatbot states
+  const [tutorDrawerVisible, setTutorDrawerVisible] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [tutorLoading, setTutorLoading] = useState(false);
 
   // Highlights & Version Control States
   const [highlights, setHighlights] = useState<Highlight[]>([]);
@@ -796,6 +810,46 @@ export default function ResultsScreen() {
       .trim();
   };
 
+  const handleSendTutorMessage = async () => {
+    if (!chatInput.trim() || !session || tutorLoading) return;
+
+    const userMsg = chatInput;
+    setChatInput("");
+    
+    const newMessages = [...chatMessages, { sender: "user" as const, text: userMsg }];
+    setChatMessages(newMessages);
+    setTutorLoading(true);
+
+    try {
+      const token = await getVerifiedToken();
+      const response = await fetch(`${API_BASE_URL}/api/session-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+          "Bypass-Tunnel-Reminder": "true",
+        },
+        body: JSON.stringify({
+          sessionId: session.id,
+          message: userMsg,
+          chatHistory: newMessages,
+          isPremium,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.text) {
+        setChatMessages([...newMessages, { sender: "assistant", text: data.text }]);
+      } else {
+        setChatMessages([...newMessages, { sender: "assistant", text: `Error: ${data.error || "Unable to reach Tutor."}` }]);
+      }
+    } catch (err) {
+      setChatMessages([...newMessages, { sender: "assistant", text: "Connection failed. Please check your internet connection." }]);
+    } finally {
+      setTutorLoading(false);
+    }
+  };
+
   const handleToggleSpeech = async () => {
     if (isSpeaking) {
       Speech.stop();
@@ -1259,6 +1313,25 @@ export default function ResultsScreen() {
                         <Feather name="help-circle" size={16} color="rgb(245,158,11)" />
                       </TouchableOpacity>
 
+                      {/* AI Tutor Chatbot Button */}
+                      <TouchableOpacity
+                        style={[styles.headerIconBtn, { backgroundColor: "rgba(124,58,237,0.08)", borderColor: "rgba(124,58,237,0.2)" }]}
+                        onPress={() => {
+                          setTutorDrawerVisible(true);
+                          if (chatMessages.length === 0) {
+                            setChatMessages([
+                              {
+                                sender: "assistant",
+                                text: `Hi! I am your AI Study Tutor. Ask me any questions grounded in this session's audio or document slides.`,
+                              },
+                            ]);
+                          }
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="message-square" size={16} color="rgb(124, 58, 237)" />
+                      </TouchableOpacity>
+
                       {/* Speak Button */}
                       <TouchableOpacity
                         style={styles.headerIconBtn}
@@ -1390,6 +1463,86 @@ export default function ResultsScreen() {
             />
           </ScrollView>
         </View>
+      </Modal>
+
+      {/* AI Tutor Chatbot Drawer */}
+      <Modal
+        visible={tutorDrawerVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setTutorDrawerVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.tutorModalContainer}
+        >
+          <View style={styles.tutorDrawerContent}>
+            {/* Header */}
+            <View style={styles.tutorDrawerHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Feather name="message-square" size={20} color="rgb(139, 92, 246)" style={{ marginRight: Spacing.sm }} />
+                <Text style={styles.tutorDrawerTitle}>AI Study Tutor</Text>
+              </View>
+              <TouchableOpacity onPress={() => setTutorDrawerVisible(false)} activeOpacity={0.7} style={{ padding: 4 }}>
+                <Feather name="x" size={20} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Messages */}
+            <ScrollView
+              style={styles.tutorMessagesList}
+              contentContainerStyle={styles.tutorMessagesContent}
+              ref={(ref) => {
+                setTimeout(() => ref?.scrollToEnd({ animated: true }), 100);
+              }}
+            >
+              {chatMessages.map((msg, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.tutorBubble,
+                    msg.sender === "user" ? styles.tutorBubbleUser : styles.tutorBubbleTutor,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tutorBubbleText,
+                      msg.sender === "user" ? styles.tutorBubbleTextUser : styles.tutorBubbleTextTutor,
+                    ]}
+                  >
+                    {msg.text}
+                  </Text>
+                </View>
+              ))}
+              {tutorLoading && (
+                <View style={[styles.tutorBubble, styles.tutorBubbleTutor, { flexDirection: "row", alignItems: "center", gap: Spacing.xs }]}>
+                  <ActivityIndicator size="small" color={Colors.accent3} />
+                  <Text style={[styles.tutorBubbleText, styles.tutorBubbleTextTutor]}>Tutor is typing...</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Input Bar */}
+            <View style={[styles.tutorInputBar, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
+              <TextInput
+                style={styles.tutorTextInput}
+                placeholder="Ask me to explain, clarify, or test you..."
+                placeholderTextColor={Colors.textMuted}
+                value={chatInput}
+                onChangeText={setChatInput}
+                onSubmitEditing={handleSendTutorMessage}
+              />
+              <TouchableOpacity
+                style={[styles.tutorSendBtn, !chatInput.trim() && { opacity: 0.5 }]}
+                disabled={!chatInput.trim() || tutorLoading}
+                onPress={handleSendTutorMessage}
+                activeOpacity={0.8}
+              >
+                <Feather name="send" size={16} color={Colors.white} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Add Highlight Modal */}
@@ -2213,6 +2366,106 @@ export default function ResultsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bgPrimary },
+
+  // AI Tutor Chatbot Drawer Styles
+  tutorModalContainer: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(10, 10, 15, 0.65)",
+  },
+  tutorDrawerContent: {
+    backgroundColor: Colors.bgCard,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    height: "80%",
+  },
+  tutorDrawerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  tutorDrawerTitle: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  tutorMessagesList: {
+    flex: 1,
+    padding: Spacing.lg,
+  },
+  tutorMessagesContent: {
+    gap: Spacing.md,
+    paddingBottom: Spacing.xl,
+  },
+  tutorBubble: {
+    maxWidth: "80%",
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+  },
+  tutorBubbleUser: {
+    alignSelf: "flex-end",
+    backgroundColor: Colors.accent1,
+    borderBottomRightRadius: 2,
+  },
+  tutorBubbleTutor: {
+    alignSelf: "flex-start",
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderBottomLeftRadius: 2,
+  },
+  tutorBubbleText: {
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+  },
+  tutorBubbleTextUser: {
+    color: Colors.white,
+  },
+  tutorBubbleTextTutor: {
+    color: Colors.textPrimary,
+  },
+  tutorInputBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.bgCard,
+    gap: Spacing.sm,
+  },
+  tutorTextInput: {
+    flex: 1,
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    color: Colors.textPrimary,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    fontSize: FontSize.sm,
+  },
+  tutorSendBtn: {
+    backgroundColor: Colors.accent1,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: Colors.accent1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+
   scroll: { flex: 1 },
   content: { padding: Spacing.lg, paddingBottom: Spacing["3xl"], gap: Spacing.lg },
   center: { flex: 1, backgroundColor: Colors.bgPrimary, justifyContent: "center", alignItems: "center" },

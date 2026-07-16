@@ -46,6 +46,7 @@ export interface Session {
   photoTexts?: string[];
   isMasterGuide?: boolean;
   extraNotes?: string;
+  documentNotes?: string[];
   
   // Offline caching & version control
   artifacts?: GeneratedArtifact[];
@@ -56,7 +57,8 @@ export function computeSourceHash(session: Session): string {
   const transcript = session.rawTranscript || "";
   const notes = session.extraNotes || "";
   const photos = session.photoUris ? session.photoUris.join(",") : "";
-  const combined = `${transcript}|${notes}|${photos}`;
+  const docs = session.documentNotes ? session.documentNotes.join(",") : "";
+  const combined = `${transcript}|${notes}|${photos}|${docs}`;
   
   let hash = 0;
   for (let i = 0; i < combined.length; i++) {
